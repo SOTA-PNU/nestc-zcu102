@@ -1,0 +1,141 @@
+diff --git a/vta/bundles/Resnet18Test/CMakeLists.txt b/vta/bundles/Resnet18Test/CMakeLists.txt
+index 346e453..4a387e4 100644
+--- a/vta/bundles/Resnet18Test/CMakeLists.txt
++++ b/vta/bundles/Resnet18Test/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ option(VTA_RESNET18_WITH_SKIPQUANT0 "Build the LLVM-based JIT CPU backend" OFF)
+-option(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS "Download bundles from AWS S3" OFF)
++
+ add_custom_command(
+         OUTPUT
+         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+@@ -8,6 +8,7 @@ add_custom_command(
+         wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+         COMMAND
+         wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
++        #wget https://github.com/6twinsniwt9/resnet18_50/raw/main/resnet18_50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+ )
+ 
+ add_custom_target(vtaMxnetResnet18BundleONNX
+@@ -16,7 +17,7 @@ add_custom_target(vtaMxnetResnet18BundleONNX
+         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+ )
+ 
+-if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
++if(NESTC_USE_VTASIM)
+     if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
+         add_custom_command(
+                 OUTPUT
+@@ -73,71 +74,52 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
+         )
+     endif()
+ else()
+-    if(NOT NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS)
+-        if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
+-            add_custom_command(
+-                    OUTPUT
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+-                    ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_profile.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_debug.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.h -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+-            )
+-        else()
+-            add_custom_command(
+-                    OUTPUT
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+-                    ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+-                    ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_profile.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_debug.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.h -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+-                    COMMAND
+-                    wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+-            )
+-        endif()
++    if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
++        add_custom_command(
++                OUTPUT
++                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
++                #${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
++                #${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
++                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
++                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
++                ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
++                COMMAND
++                wget https://raw.githubusercontent.com/purity2583/ds/main/mxnet_exported_resnet18.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
++               # COMMAND
++               # wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_profile.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
++               # COMMAND
++               # wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_debug.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
++                COMMAND
++                wget https://raw.githubusercontent.com/purity2583/ds/main/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
++                COMMAND
++                wget https://raw.githubusercontent.com/purity2583/ds/main/mxnet_exported_resnet18.h -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
++                COMMAND
++                wget https://github.com/purity2583/ds/raw/main/mxnet_exported_resnet18.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
++        )
+     else()
+         add_custom_command(
+-        OUTPUT
+-            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+-            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+-            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+-            ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+-            COMMAND
+-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+-            COMMAND
+-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.h ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+-            COMMAND
+-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+-            COMMAND
+-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
++                OUTPUT
++                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
++                #${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
++                #${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
++                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
++                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
++                ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
++                COMMAND
++                wget https://raw.githubusercontent.com/purity2583/ds/main/mxnet_exported_resnet18.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
++               # COMMAND
++               # wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_profile.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
++               # COMMAND
++               # wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_debug.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
++                COMMAND
++                wget https://raw.githubusercontent.com/purity2583/ds/main/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
++                COMMAND
++                wget https://raw.githubusercontent.com/purity2583/ds/main/mxnet_exported_resnet18.h -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
++                COMMAND
++                wget https://github.com/purity2583/ds/raw/main/mxnet_exported_resnet18.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+         )
+     endif()
+ 
+-
+ endif()
+ add_custom_target(vtaMxnetResnet18BundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin)
+ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
