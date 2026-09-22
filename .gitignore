@@ -1,0 +1,17 @@
+# SD카드 백업 — 용량이 크고 인증정보를 포함하므로 저장소에 올리지 않는다
+backups/
+*.tar
+*.tar.gz
+*.img
+
+# 부트 바이너리 — 필요하면 Releases로 배포
+*.BIN
+*.ub
+
+# OS 메타데이터
+.DS_Store
+Thumbs.db
+desktop.ini
+.fseventsd/
+.Spotlight-V100/
+'System Volume Information'/
