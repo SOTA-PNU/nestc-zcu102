@@ -18,11 +18,11 @@ VTA(FPGA) + ARM CPU 분산 추론
 
 ## 현재 상태
 
-| 모델 | 파라미터 | 값 범위 | 채널 | 결과 | 추론 시간 |
-|------|---------|--------|------|------|----------|
-| ResNet-18 | 11.7M | 0~255 | BGR | **정상** | 110 ms |
-| ResNet-50 | 25.6M | 0~1 | RGB | 입력 무관 고정 출력 | 482 ms |
-| VGG-19 | 143.7M | 0~1 | BGR | 균등분포 | 11,127 ms |
+| 모델 | 파라미터 | 결과 | 추론 시간 |
+|------|---------|------|----------|
+| ResNet-18 | 11.7M | **정상** (207 / 340 / 281) | 110 ms |
+| ResNet-50 | 25.6M | **정상** (207 / 340) — 패치 필요 | 480 ms |
+| VGG-19 | 143.7M | 미해결, 균등분포 | 18,174 ms |
 
 ResNet-18 실측 (2026-09-21):
 
@@ -36,8 +36,21 @@ cat이 281(tabby cat)로 나오지만 285(Egyptian cat)와 같은 품종군이�
 confidence가 낮다. int8 양자화 모델이 헷갈린 정상 범위의 근사다.
 첫 실행 180 ms는 VTA 드라이버 초기화와 캐시 워밍업이 포함된 값이다.
 
-ResNet-50과 VGG-19의 실패 원인은 규명되었고 **`main.cpp` 한두 줄 수정으로
-고칠 수 있다.** → [docs/05-model-debugging.md](docs/05-model-debugging.md)
+ResNet-50 은 `CPUBundle_aarch64.cpp` 의 **`transpose()` 가 미구현**
+(`//TODO re-implement; return -1`)이어서 입력과 무관한 고정 출력을 냈다.
+`patches/fix-aarch64-transpose.sh` 로 고치면 정상 동작하며 1,987 ms → 480 ms
+로 4.1배 빨라진다. VGG-19 는 아직 미해결이다.
+→ [docs/05-model-debugging.md](docs/05-model-debugging.md)
+
+### ResNet-50 을 쓰려면
+
+```bash
+bash patches/fix-aarch64-transpose.sh          # transpose() 구현 이식
+cd <빌드디렉토리>
+cmake . -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=OFF \
+        -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm
+make vtaCaffe2Resnet50Bundle
+```
 
 ## 빠른 시작
 
@@ -73,12 +86,18 @@ endif()
 보드는 **다운로드 경로**를 쓴다. 받아온 `.cpp` 를 `*Main.cpp` 와 함께
 gcc로 컴파일할 뿐이므로 **LLVM이 필요 없다.**
 
-이 구분이 중요하다. 보드는 Ubuntu 18.04 arm64라 apt 저장소의 LLVM이
-6.0이 최대여서 nest-compiler 전체 빌드는 불가능하다. 하지만 번들 빌드는
-문제없이 된다 — ResNet-50을 보드에서 실제로 빌드해 확인했다.
+번들 빌드는 보드에서 문제없이 된다 — ResNet-50을 실제로 빌드해 확인했다.
 
-새 모델을 직접 컴파일하려면 `model-compiler` 가 필요하고, 그것만
-호스트 PC(Ubuntu 20.04 + LLVM 8)가 있어야 한다.
+새 모델을 직접 컴파일하려면 `model-compiler` 가 필요하고, 이쪽은
+LLVM >= 7.0 을 요구한다. `apt` 저장소는 LLVM 6.0 이 최대지만
+**보드에 LLVM 8.0.1 이 별도로 설치되어 있다** (`/usr/lib/llvm-8.0/`,
+clang 포함). cmake 에 다음을 주면 된다.
+
+```
+-DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm
+```
+
+즉 호스트 PC 없이 보드에서 모델을 직접 컴파일할 수 있다.
 
 ```bash
 model-compiler -g \
@@ -104,7 +123,7 @@ SoftMax는 float으로 남긴다.
 | 커널 | 4.14.0-xilinx-v2018.3 aarch64 |
 | RAM | 1.5 GB (+1 GB swap) |
 | SD | 128 GB 카드, 64 GB 파티션 (rootfs 59 GiB, 15 GB 사용) |
-| LLVM | 6.0 (apt 저장소 최대치) |
+| LLVM | 6.0 (apt) + **8.0.1** (`/usr/lib/llvm-8.0/`, clang 포함) |
 | 빌드도구 | cmake 3.10.2, ninja, gcc 7.3.0 |
 
 ## 문서
@@ -163,12 +182,20 @@ vta/bundles/Resnet18PartitionTest/CMakeLists.txt   (76줄)
 grep CMAKE_GENERATOR: build/CMakeCache.txt
 ```
 
+## 주의 — 실행 중 Ctrl+C 금지
+
+VTA 프로그램을 강제 종료하면 `destroyVTARuntime()` 이 호출되지 않아 FPGA 와
+xlnk 드라이버가 정리되지 않는다. 이후 모든 실행이 멈추며 **재부팅해야만
+풀린다.** 증상은 프로그램이 끝나지 않고 `time` 의 `sys` 시간이 비정상적으로
+큰 것(실측 25분 중 sys 20분)이며, dmesg 에는 아무 에러도 남지 않는다.
+
 ## 다음 과제
 
-- ResNet-50, VGG-19 전처리 수정 후 재빌드·검증
-- 세 모델의 추론 시간·정확도 비교 (아키텍처별 VTA 적합성)
-- VGG-19 가 11초 걸리는 이유 분석 — 어느 레이어가 CPU로 폴백되는지
-  (`partition_profile_*` 번들 활용)
+- VGG-19 해결 — `transpose` 패치 적용 후 aarch64 로 재시도,
+  안 되면 `model-compiler` 로 번들 재생성 (보정 프로파일 파일명 버그 수정)
+- ETRI 업스트림에 `transpose()` 미구현 버그 보고
+- `NESTC_EVTA_MULTI` 로 멀티 코어 EVTA 활용 (번들 재생성 필요)
+- `partition_profile_*` 번들로 VTA/CPU 분담 비율 측정
 
 ## 참고
 

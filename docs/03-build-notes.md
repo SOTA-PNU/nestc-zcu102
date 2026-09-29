@@ -2,10 +2,25 @@
 
 ## 결론부터
 
-**이 보드에서는 nest-compiler를 빌드할 수 없다.** 다만 번들이 이미 생성되어
-있어 ResNet-18 실행에는 문제가 없다. 새 모델을 컴파일하려면 호스트 PC가 필요하다.
+번들 빌드는 보드에서 문제없이 된다. `model-compiler` 를 포함한 전체 빌드도
+**보드에 설치된 LLVM 8.0.1 을 지정하면 가능하다.**
 
-## LLVM 버전 제약
+```
+-DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm
+```
+
+> **2026-09-22 정정.** 이 문서는 당초 "보드에서 빌드 불가"로 결론냈으나
+> 이는 틀렸다. `apt-cache search llvm` 이 6.0 까지만 보여주고
+> `llvm-config --version` 이 6.0.0 을 반환해서 그렇게 판단했는데,
+> `/usr/lib/llvm-8.0/` 에 clang 까지 포함된 완전한 LLVM 8 이 별도로
+> 설치되어 있다. 아래 "LLVM 버전 제약" 절은 apt 저장소에 한정된 이야기다.
+
+```bash
+$ /usr/lib/llvm-8.0/bin/llvm-config --version
+8.0.1
+```
+
+## LLVM 버전 제약 (apt 저장소 한정)
 
 공식 문서(`docs/nestc/install.md`)의 요구사항은 **LLVM >= 7.0** 이고,
 권장 환경은 Ubuntu 20.04 + llvm-8 이다.
