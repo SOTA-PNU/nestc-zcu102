@@ -54,24 +54,45 @@ CI 에서 한 번도 밟히지 않았고, `transpose()` 미구현 버그가 3년
 
 **transpose 패치를 적용한다.** `ci/patch_transpose.py` 참조. 멱등하다.
 
-## 보드 러너 등록
+## 러너 등록 — 보드가 아니라 PC 에
 
-ZCU102 에 self-hosted 러너를 라벨 `zcu102` 로 등록한다.
+러너를 보드에 직접 올리는 구성은 두 가지 이유로 쓰지 않는다.
+
+하나, 보드는 Ubuntu 18.04 / glibc 2.27 이다. GitHub Actions 의 자바스크립트 액션
+(`actions/checkout@v4`, `actions/upload-artifact@v4` 등)은 Node 20 바이너리를
+러너가 직접 실행하는데, Node 20 은 glibc 2.28 이상을 요구한다. 보드에서는
+러너가 등록은 되어도 액션 단계에서 바로 죽는다.
+
+둘, 보드의 리눅스 가용 메모리는 1.5GB 뿐이다(DDR 4GB 중 나머지는 VTA 용 CMA 예약).
+실측 가용은 615MB 였다. 러너 프로세스가 수백 MB 를 차지하면 `-j1` 빌드조차
+OOM 으로 떨어진다.
+
+그래서 러너는 PC(WSL2, x64)에 두고, 보드에는 SSH 로 명령만 보낸다.
+보드는 지금까지와 똑같이 빌드와 실행만 담당하고, 자바스크립트는 한 줄도 돌지 않는다.
 
 ```sh
-# 보드에서
+# PC 의 WSL 안에서
 mkdir -p ~/actions-runner && cd ~/actions-runner
 # GitHub 저장소 Settings > Actions > Runners > New self-hosted runner
-# Architecture 를 ARM64 로 선택하고 안내대로 진행
-./config.sh --url https://github.com/SOTA-PNU/nestc-etri --token <토큰> --labels zcu102
-./run.sh
+# Architecture 는 Linux x64 를 선택하고 안내대로 진행
+./config.sh --url https://github.com/SOTA-PNU/nestc-etri --token <토큰> \
+            --labels self-hosted,linux,x64
+sudo ./svc.sh install && sudo ./svc.sh start   # 부팅 시 자동 시작
 ```
 
-보드의 리눅스 가용 메모리는 1.5GB 뿐이다(DDR 4GB 중 나머지는 VTA 용 CMA 예약).
-러너 자체가 수백 MB 를 쓰므로 빌드는 반드시 `-j1` 로 한다.
+저장소 시크릿(Settings > Secrets and variables > Actions):
 
-러너를 보드에 두기 부담스러우면, PC 에 러너를 두고 SSH 로 보드에 명령을 보내는
-구성도 가능하다. 그 경우 보드 접속용 SSH 키를 저장소 시크릿에 넣는다.
+| 이름 | 값 |
+|---|---|
+| `BOARD_HOST` | 보드 주소 |
+| `BOARD_PORT` | SSH 포트 |
+| `BOARD_USER` | `xilinx` |
+| `BOARD_SSH_KEY` | 보드 `~/.ssh/authorized_keys` 에 등록한 개인키 전문 |
+| `BOARD_SUDO_PW` | (선택) sudo 비밀번호. NOPASSWD 라면 불필요 |
+
+키는 반드시 터미널에서 만들고 시크릿 입력란에만 붙여넣는다.
+`ssh-keygen -t ed25519 -f ~/.ssh/board_ci -N ""` 로 만든 뒤
+`ssh-copy-id -i ~/.ssh/board_ci.pub -p <포트> xilinx@<주소>` 로 등록한다.
 
 ## 주의
 
