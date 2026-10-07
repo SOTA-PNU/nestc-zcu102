@@ -4,81 +4,155 @@ name: board-test
 # 원본은 etri-board 러너에서 돌았고, 정작 실행(`sudo make check_zcu102`)은
 # 주석 처리되어 있었다. 여기서는 실제로 실행한다.
 #
-# 전제: ZCU102 보드에 self-hosted runner 가 라벨 [self-hosted, zcu102] 로 등록되어 있고,
-#       보드의 ~/bin/aws 에 S3 -> gitlab 치환 shim 이 설치되어 있을 것.
-#       (죽은 S3 버킷 nestc-data-pub 대신 gitlab nestc-data 에서 받는다)
+# 러너는 보드가 아니라 PC 에 둔다. 보드는 Ubuntu 18.04(glibc 2.27)라
+# Node 20 기반 액션(actions/checkout@v4 등)이 실행되지 않고,
+# 가용 메모리도 1.5GB 뿐이라 러너를 올리면 빌드와 충돌한다.
+# PC 러너가 SSH 로 보드에 명령만 보낸다.
+#
+# 필요한 저장소 시크릿:
+#   BOARD_HOST     예) sota.pusan.ac.kr
+#   BOARD_PORT     예) 25022
+#   BOARD_USER     예) xilinx
+#   BOARD_SSH_KEY  보드 ~/.ssh/authorized_keys 에 등록한 개인키 전문
+#   BOARD_SUDO_PW  (선택) sudo 비밀번호. NOPASSWD 로 설정했다면 불필요
+#
+# 보드 사전 준비:
+#   ~/bin/aws         죽은 S3 버킷 대신 gitlab nestc-data 에서 받는 shim
+#   ~/nest-compiler-2024  상류 클론 (--recursive)
 
 on:
   workflow_dispatch:
     inputs:
       cpu_impl:
-        description: "CPU fallback 구현"
+        description: "CPU fallback 구현 (generic 이 상류 기본값)"
         type: choice
         options: [generic, aarch64]
         default: generic
+      rebuild:
+        description: "빌드 디렉터리를 지우고 처음부터"
+        type: boolean
+        default: false
 
 jobs:
   zcu102:
-    runs-on: [self-hosted, zcu102]
-    timeout-minutes: 180
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 300
+
+    env:
+      BOARD: ${{ secrets.BOARD_USER }}@${{ secrets.BOARD_HOST }}
+      PORT: ${{ secrets.BOARD_PORT }}
+      SRC: /home/xilinx/nest-compiler-2024
+      BUILD: /home/xilinx/nest-compiler-2024/build_board
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 1
-
-      - name: Check environment
+      - name: SSH 준비
         run: |
-          set -eux
-          export PATH=$HOME/bin:$PATH
-          which aws
-          free -h
-          df -h /
-          ls /usr/lib/llvm-8.0/bin/llvm-config
+          set -eu
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOARD_SSH_KEY }}" > ~/.ssh/board_key
+          chmod 600 ~/.ssh/board_key
+          ssh-keyscan -p "$PORT" -H "${{ secrets.BOARD_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          cat > ~/.ssh/config <<EOF
+          Host board
+            HostName ${{ secrets.BOARD_HOST }}
+            Port $PORT
+            User ${{ secrets.BOARD_USER }}
+            IdentityFile ~/.ssh/board_key
+            ServerAliveInterval 60
+            ServerAliveCountMax 10
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh board 'echo 보드 접속 OK; uname -a; free -h | head -2; df -h / | tail -1'
+
+      - name: 상류 소스 갱신
+        run: |
+          ssh board "set -eu
+            if [ ! -d $SRC/.git ]; then
+              git clone --depth 1 --recursive https://gitlab.com/ones-ai/nest-compiler.git $SRC
+            else
+              cd $SRC && git fetch --depth 1 origin && git reset --hard origin/main && git submodule update --init --recursive --depth 1
+            fi
+            cd $SRC && git log --oneline -1"
 
       # 상류 vtalib 의 transpose() 가 미구현 스텁이라
       # aarch64 경로에서 입력과 무관한 고정 출력이 나온다.
-      - name: Patch vtalib transpose
+      - name: transpose 패치
         run: |
-          set -eux
-          python3 ci/patch_transpose.py vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+          scp ci/patch_transpose.py board:/home/xilinx/patch_transpose.py
+          ssh board "python3 /home/xilinx/patch_transpose.py $SRC/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp"
 
-      - name: Configure
+      - name: 설정
         run: |
-          set -eux
-          export PATH=$HOME/bin:$PATH
-          if [ "${{ inputs.cpu_impl }}" = "aarch64" ]; then GEN=OFF; else GEN=ON; fi
-          mkdir -p build_board && cd build_board
-          cmake .. \
-            -DNESTC_WITH_EVTA=ON \
-            -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DNESTC_USE_VTASIM=OFF \
-            -DVTA_RESNET18_WITH_SKIPQUANT0=ON \
-            -DNESTC_EVTA_RUN_ON_ZCU102=ON \
-            -DNESTC_USE_PRECOMPILED_BUNDLE=ON \
-            -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=$GEN
+          GEN=ON
+          [ "${{ inputs.cpu_impl }}" = "aarch64" ] && GEN=OFF
+          CLEAN=""
+          [ "${{ inputs.rebuild }}" = "true" ] && CLEAN="rm -rf $BUILD;"
+          ssh board "set -eu
+            export PATH=\$HOME/bin:\$PATH
+            $CLEAN
+            mkdir -p $BUILD && cd $BUILD
+            cmake .. \
+              -DNESTC_WITH_EVTA=ON \
+              -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DNESTC_USE_VTASIM=OFF \
+              -DVTA_RESNET18_WITH_SKIPQUANT0=ON \
+              -DNESTC_EVTA_RUN_ON_ZCU102=ON \
+              -DNESTC_USE_PRECOMPILED_BUNDLE=ON \
+              -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=$GEN 2>&1 | tail -20"
 
       # 보드 메모리는 1.5GB 뿐이므로 -j1 로만 빌드한다.
-      - name: Build bundles
+      # 번들 소스와 Input/Golden 데이터는 ~/bin/aws shim 이 gitlab 에서 받아온다.
+      - name: 번들 빌드
         run: |
-          set -eux
-          export PATH=$HOME/bin:$PATH
-          cd build_board
-          make -j1 2>&1 | tail -40
+          ssh board "set -eu
+            export PATH=\$HOME/bin:\$PATH
+            cd $BUILD
+            make -j1 > /home/xilinx/ci-build.log 2>&1 || true
+            echo '--- 마지막 20줄 ---'
+            tail -20 /home/xilinx/ci-build.log
+            echo '--- 다운로드 횟수 ---'
+            grep -c 'aws-shim' /home/xilinx/ci-build.log || true
+            echo '--- 에러 ---'
+            grep -cE 'Error [0-9]|error:' /home/xilinx/ci-build.log || true"
 
-      - name: Run ZCU102 tests
+      # VTA 프로그램 실행 중 중단은 금물이다.
+      # FPGA 와 커널 메모리 할당기가 정리되지 않아 재부팅 전까지 보드를 쓸 수 없다.
+      - name: ZCU102 테스트
         run: |
-          set -eux
-          export PATH=$HOME/bin:$PATH
-          cd build_board
-          sudo -E make check_zcu102 2>&1 | tee ../board-test.log
+          ssh board "set -eu
+            export PATH=\$HOME/bin:\$PATH
+            cd $BUILD
+            sudo -E env PATH=\$PATH make check_zcu102 > /home/xilinx/ci-check.log 2>&1 || true
+            tail -60 /home/xilinx/ci-check.log"
 
-      - name: Upload log
+      - name: 로그 회수
+        if: always()
+        run: |
+          mkdir -p logs
+          scp board:/home/xilinx/ci-build.log logs/ 2>/dev/null || true
+          scp board:/home/xilinx/ci-check.log logs/ 2>/dev/null || true
+          ls -la logs/
+
+      - name: 결과 판정
+        run: |
+          if grep -qE '100% tests passed' logs/ci-check.log; then
+            echo "모든 테스트 통과"
+          else
+            echo "실패한 테스트:"
+            grep -E 'Failed|\*\*\*' logs/ci-check.log | head -40
+            exit 1
+          fi
+
+      - name: 로그 업로드
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: board-test-log-${{ inputs.cpu_impl }}
-          path: board-test.log
+          name: board-test-${{ inputs.cpu_impl }}
+          path: logs/
           retention-days: 30
+
+      - name: 키 정리
+        if: always()
+        run: rm -f ~/.ssh/board_key
