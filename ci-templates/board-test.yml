@@ -1,0 +1,84 @@
+name: board-test
+
+# GitLab CI 의 test-board 스테이지를 옮긴 것.
+# 원본은 etri-board 러너에서 돌았고, 정작 실행(`sudo make check_zcu102`)은
+# 주석 처리되어 있었다. 여기서는 실제로 실행한다.
+#
+# 전제: ZCU102 보드에 self-hosted runner 가 라벨 [self-hosted, zcu102] 로 등록되어 있고,
+#       보드의 ~/bin/aws 에 S3 -> gitlab 치환 shim 이 설치되어 있을 것.
+#       (죽은 S3 버킷 nestc-data-pub 대신 gitlab nestc-data 에서 받는다)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cpu_impl:
+        description: "CPU fallback 구현"
+        type: choice
+        options: [generic, aarch64]
+        default: generic
+
+jobs:
+  zcu102:
+    runs-on: [self-hosted, zcu102]
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Check environment
+        run: |
+          set -eux
+          export PATH=$HOME/bin:$PATH
+          which aws
+          free -h
+          df -h /
+          ls /usr/lib/llvm-8.0/bin/llvm-config
+
+      # 상류 vtalib 의 transpose() 가 미구현 스텁이라
+      # aarch64 경로에서 입력과 무관한 고정 출력이 나온다.
+      - name: Patch vtalib transpose
+        run: |
+          set -eux
+          python3 ci/patch_transpose.py vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+
+      - name: Configure
+        run: |
+          set -eux
+          export PATH=$HOME/bin:$PATH
+          if [ "${{ inputs.cpu_impl }}" = "aarch64" ]; then GEN=OFF; else GEN=ON; fi
+          mkdir -p build_board && cd build_board
+          cmake .. \
+            -DNESTC_WITH_EVTA=ON \
+            -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNESTC_USE_VTASIM=OFF \
+            -DVTA_RESNET18_WITH_SKIPQUANT0=ON \
+            -DNESTC_EVTA_RUN_ON_ZCU102=ON \
+            -DNESTC_USE_PRECOMPILED_BUNDLE=ON \
+            -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=$GEN
+
+      # 보드 메모리는 1.5GB 뿐이므로 -j1 로만 빌드한다.
+      - name: Build bundles
+        run: |
+          set -eux
+          export PATH=$HOME/bin:$PATH
+          cd build_board
+          make -j1 2>&1 | tail -40
+
+      - name: Run ZCU102 tests
+        run: |
+          set -eux
+          export PATH=$HOME/bin:$PATH
+          cd build_board
+          sudo -E make check_zcu102 2>&1 | tee ../board-test.log
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-test-log-${{ inputs.cpu_impl }}
+          path: board-test.log
+          retention-days: 30

@@ -1,0 +1,68 @@
+name: build
+
+# GitLab CI 의 .builds / build 스테이지를 GitHub Actions 로 옮긴 것.
+# 빌드 이미지는 ETRI 공식 SDK(onesai1/nest-compiler-sdk)를 그대로 쓴다.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: onesai1/nest-compiler-sdk:1.0.0
+
+    steps:
+      - name: Disk before
+        run: df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Configure
+        run: |
+          set -eux
+          mkdir -p build_ci && cd build_ci
+          export TVM_HOME=$GITHUB_WORKSPACE/tvm
+          export DMLC_CORE=$GITHUB_WORKSPACE/tvm/3rdparty/dmlc-core
+          export TVM_BUILD_PATH=$GITHUB_WORKSPACE/build_ci/tvm
+          export TVM_LIBRARY_PATH=$GITHUB_WORKSPACE/build_ci/tvm
+          export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
+          cmake -G Ninja .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNESTC_WITH_EVTA=ON \
+            -DNESTC_EVTA_BUNDLE_TEST=ON \
+            -DGLOW_WITH_BUNDLES=ON
+
+      # GitHub 호스티드 러너는 4코어 / 디스크 14GB 라서
+      # ninja check_nestc 전체는 자원이 모자랄 수 있다.
+      # 우선 컴파일러 도구 두 개만 만든다.
+      - name: Build compiler tools
+        run: |
+          set -eux
+          cd build_ci
+          ninja model-compiler image-classifier
+
+      - name: Versions
+        run: |
+          ./build_ci/glow/bin/model-compiler --version
+          ./build_ci/glow/bin/image-classifier --version || true
+
+      - name: Disk after
+        if: always()
+        run: df -h /
+
+      - name: Upload compiler tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: nestc-tools
+          path: |
+            build_ci/glow/bin/model-compiler
+            build_ci/glow/bin/image-classifier
+          retention-days: 14
+          if-no-files-found: error
