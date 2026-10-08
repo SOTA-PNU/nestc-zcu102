@@ -613,13 +613,20 @@ sudo -E env PATH=$HOME/bin:$PATH ctest -L ZCU102 --output-on-failure 2>&1 | tee 
 
 ### 11.6 PC 측 번들 생성 환경 (WSL + Docker)
 
-4.2절의 명령을 실행할 환경이다. ETRI 공식 SDK 이미지를 쓴다.
+4.2절의 명령을 실행할 환경이다. **도커 이미지는 빌드 환경만 제공하며 컴파일러는 포함되어 있지 않다.** 호스트 디렉터리를 컨테이너에 마운트하고 그 안에서 상류를 빌드하면, 결과물은 컨테이너가 아니라 호스트에 남는다.
 
-```sh
-docker pull onesai1/nest-compiler-sdk:1.0.0
-```
+| 항목 | 값 |
+|---|---|
+| 호스트 작업 디렉터리 | `~/nestc-upstream` (WSL) |
+| 컨테이너 안 경로 | `/root/nestc` |
+| 빌드 결과물 | `~/nestc-upstream/build/glow/bin/{model-compiler,image-classifier}` |
+| 컨테이너 이름 | `nestc` |
 
-이 이미지는 Ubuntu 20.04, clang 8.0.1, llvm-8, aarch64 크로스 컴파일러, onnxruntime 1.12.1을 포함한다. 정의는 `gitlab.com/ones-ai/nest-compiler-sdk` 에 있다.
+**번들 생성에는 `leejaymin/nestc-ssh:latest` 를 쓴다.** 6.2절의 검증이 이 환경에서 이루어졌다.
+
+**CI 빌드에는 ETRI 공식 SDK `onesai1/nest-compiler-sdk:1.0.0` 을 쓴다.** 상류 `.gitlab-ci.yml` 이 지정하는 태그를 그대로 따랐다. 정의는 `gitlab.com/ones-ai/nest-compiler-sdk` 에 있다.
+
+주의할 점이 둘 있다. 공식 SDK의 `1.0.0` 과 `latest` 는 **서로 다른 이미지다.** 다이제스트가 다르고 크기도 4.68GB와 6.26GB로 차이 난다. 그리고 `1.0.0` 에는 `llvm-config` 가 PATH에 없어 cmake가 LLVM을 자동으로 찾지 못할 수 있으므로 `-DLLVM_DIR=/usr/lib/llvm-8/lib/cmake/llvm` 을 명시하는 편이 안전하다. 공식 SDK로 번들을 생성해 본 적은 아직 없으므로, 환경을 통일하려면 6.2절의 기준값과 먼저 대조해야 한다.
 
 보정 프로파일은 **받는 것이 아니라 생성하는 것**이다. `-dump-profile` 로 VTAInterpreter를 돌려 레이어별 Min/Max/Histogram을 수집한다. 이 사실을 몰라 이틀을 소모하였으므로 특히 강조해 둔다.
 

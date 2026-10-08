@@ -308,17 +308,49 @@ sudo -E env PATH=$HOME/bin:$PATH ctest -L ZCU102 -R vtaMxnetResnet18Bundle --out
 
 ### 5.2 PC 환경
 
-도커 이미지가 두 개 있다. **번들 생성에 실제로 사용하고 검증한 것은 `leejaymin/nestc-ssh:latest` 이다.** 5.6절의 검증 결과가 이 환경에서 나왔다.
+**도커 이미지는 빌드 환경만 제공한다. 컴파일러는 그 안에 들어 있지 않다.** 어느 이미지에도 `model-compiler` 와 `image-classifier` 가 없으며, 상류 소스를 직접 빌드해야 한다. 이 점을 오해하면 "이미지를 받았는데 명령이 없다"에서 막힌다.
+
+구조는 이렇다. 호스트의 작업 디렉터리를 컨테이너에 마운트하고, 컨테이너 안에서 빌드한다. 결과물은 컨테이너가 아니라 **호스트에 남는다.** 컨테이너를 지워도 안전하고, 반대로 말하면 호스트 디렉터리를 지우면 몇 시간짜리 빌드를 다시 해야 한다.
+
+현재 구성은 다음과 같다.
+
+| 항목 | 값 |
+|---|---|
+| 호스트 작업 디렉터리 | `~/nestc-upstream` (WSL) |
+| 컨테이너 안 경로 | `/root/nestc` |
+| 빌드 결과물 | `~/nestc-upstream/build/glow/bin/model-compiler`<br>`~/nestc-upstream/build/glow/bin/image-classifier` |
+| 컨테이너 이름 | `nestc` |
+
+```sh
+docker start nestc
+docker exec -it nestc bash
+# 컨테이너 안에서 /root/nestc 가 호스트의 ~/nestc-upstream 이다
+```
+
+새로 세운다면 이렇게 한다.
 
 ```sh
 docker pull leejaymin/nestc-ssh:latest
+docker run -dit --name nestc -v ~/nestc-upstream:/root/nestc leejaymin/nestc-ssh:latest bash
 ```
 
-Ubuntu 20.04 + clang 8.0.1 + LLVM 8 구성이다. 이 안에서 상류를 빌드해 `model-compiler` 와 `image-classifier` 를 만든다. 절차는 `03-build-notes.md` 를 따른다.
+빌드 절차는 `03-build-notes.md` 를 따른다.
 
-다른 하나는 ETRI 공식 SDK `onesai1/nest-compiler-sdk` 다. 상류 `.gitlab-ci.yml` 이 빌드 이미지로 `1.0.0` 태그를 지정하고 있어 우리 CI(`.github/workflows/build.yml`)도 그대로 쓴다. aarch64 크로스 컴파일러와 onnxruntime 1.12.1을 포함하며 정의는 `gitlab.com/ones-ai/nest-compiler-sdk` 에 있다. 다만 **이 이미지로 번들을 생성해 본 적은 아직 없다.** CI 빌드용으로만 검증되었다. 번들 생성에 쓰려면 5.6절의 기준값으로 먼저 대조해 보아야 한다.
+#### 이미지 선택
 
-(로컬에 받아 둔 태그는 `latest` 이고 CI가 지정하는 태그는 `1.0.0` 이다. 두 태그가 동일한지는 확인하지 않았다.)
+세 가지가 있고 전부 Ubuntu 20.04 + clang 8.0.1 기반이다.
+
+| 이미지 | 크기 | LLVM | 비고 |
+|---|---|---|---|
+| `leejaymin/nestc-ssh:latest` | 6.26GB | `llvm-config` → 8.0.1 | **번들 생성에 사용·검증됨.** 5.6절이 이 환경 |
+| `onesai1/nest-compiler-sdk:latest` | 6.26GB | `llvm-config` → 8.0.1 | llvm-18도 포함 |
+| `onesai1/nest-compiler-sdk:1.0.0` | 4.68GB | `llvm-config` 없음(`llvm-config-8` 만) | 상류 `.gitlab-ci.yml` 이 지정하는 공식 CI 이미지 |
+
+`onesai1` 의 두 태그는 **서로 다른 이미지다.** 다이제스트가 다르고 크기와 생성 시점도 다르다(`1.0.0` 이 2년 전, `latest` 가 20개월 전). 태그 이름만 보고 같은 것이라 가정하면 안 된다.
+
+`1.0.0` 에는 `llvm-config` 가 PATH에 없고 `/usr/lib/llvm-8` 디렉터리만 있다. cmake가 LLVM을 자동으로 찾지 못할 수 있으므로 `-DLLVM_DIR=/usr/lib/llvm-8/lib/cmake/llvm` 을 명시하는 편이 안전하다.
+
+번들 생성에는 검증된 `leejaymin/nestc-ssh:latest` 를 쓴다. 공식 SDK로 통일하려면 5.6절의 기준값과 먼저 대조해야 한다.
 
 ### 5.3 1단계 — 보정 프로파일 생성
 
