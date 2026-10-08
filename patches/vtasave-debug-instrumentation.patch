@@ -1,0 +1,27 @@
+diff --git a/lib/Backends/VTA/VTASave.cpp b/lib/Backends/VTA/VTASave.cpp
+index 453d8a7..a4dcc8d 100644
+--- a/lib/Backends/VTA/VTASave.cpp
++++ b/lib/Backends/VTA/VTASave.cpp
+@@ -4935,6 +4935,7 @@ void VTA::save(Function *F, llvm::StringRef outputDir,
+   initBundleSave(bundleCtx, bundleName, mainEntryName);
+ 
+   for (const auto &I : IR->getInstrs()) {
++    llvm::errs() << "[VTASave] " << I.getKindName() << "\n";
+ 
+ #ifdef VTA_PROFILE
+     if (I.getKind() != Kinded::Kind::DebugPrintInstKind) {
+@@ -5009,8 +5010,12 @@ void VTA::save(Function *F, llvm::StringRef outputDir,
+       } else if (srcDimSize == 6) {
+         saveTranspose_6dim(I2, &bundle, &ctx);
+       } else {
+-        llvm::errs() << "Not supported dimenstion in transpose\n"
+-                        "Please use 4 dim or 6 dim\n";
++        llvm::errs() << "Not supported dim in transpose: ndim=" << srcDimSize << "\n";
++        for (size_t _d = 0; _d < srcDimSize; _d++) {
++          llvm::errs() << "  dim[" << _d << "] = "
++                       << (size_t)I2->getSrc()->dims()[_d] << "\n";
++        }
++        llvm::errs() << "Please use 4 dim or 6 dim\n";
+         std::exit(1);
+       }
+ 
