@@ -107,11 +107,13 @@ jobs:
             exit 1; }
           echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
           # 컨테이너 안에서의 경로다. 호스트 경로가 아니다.
-          echo "TOOLS_IN_CONTAINER=/root/nestc/build/glow/bin" >> "$GITHUB_ENV"
+          # /root 는 소유자만 접근 가능해 --user 로 돌리면 들어갈 수 없다.
+          # 그래서 상류 트리를 /src 에 마운트한다.
+          echo "TOOLS_IN_CONTAINER=/src/build/glow/bin" >> "$GITHUB_ENV"
           docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 || docker pull "$DOCKER_IMAGE"
 
       # 마운트가 둘이다.
-      #   상류 트리  -> /root/nestc   (ONNX, 보정 이미지, Main.cpp, 컴파일러)
+      #   상류 트리  -> /src          (ONNX, 보정 이미지, Main.cpp, 컴파일러)
       #   작업 공간  -> /work         (모델 기술서, 스크립트, 출력)
       # --user 로 호스트 사용자 권한을 유지해, 출력이 root 소유로 남지 않게 한다.
       - name: 번들 생성 (컨테이너)
@@ -121,14 +123,14 @@ jobs:
           mkdir -p "$OUT"
           docker run --rm \
             --user "$(id -u):$(id -g)" \
-            -v "$NESTC_UPSTREAM":/root/nestc \
+            -v "$NESTC_UPSTREAM":/src \
             -v "$GITHUB_WORKSPACE":/work \
             -w /work \
             "$DOCKER_IMAGE" \
             bash scripts/gen-bundle.sh \
               --conf "$CONF" \
               --tools "$TOOLS_IN_CONTAINER" \
-              --upstream /root/nestc \
+              --upstream /src \
               --out /work/bundle-out
           ls -la "$OUT"
 
