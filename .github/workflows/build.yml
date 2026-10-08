@@ -32,7 +32,9 @@ jobs:
           export DMLC_CORE=$GITHUB_WORKSPACE/tvm/3rdparty/dmlc-core
           export TVM_BUILD_PATH=$GITHUB_WORKSPACE/build_ci/tvm
           export TVM_LIBRARY_PATH=$GITHUB_WORKSPACE/build_ci/tvm
-          export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
+          # set -u 때문에 미정의 변수 참조가 즉시 중단을 일으킨다.
+          # 컨테이너에 PYTHONPATH 가 없으므로 기본값을 준다.
+          export PYTHONPATH=$TVM_HOME/python:${PYTHONPATH:-}
           # 이 이미지(1.0.0)에는 llvm-config 가 PATH 에 없고
           # /usr/lib/llvm-8 디렉터리만 있다. cmake 가 자동으로 찾지 못할 수
           # 있으므로 보드 빌드와 같은 방식으로 경로를 명시한다.
