@@ -16,13 +16,11 @@
 
 **경로 A — 이미 만들어진 번들로 실행한다.** 보드에 올라가 있는 실행 파일을 그대로 돌린다. 5분이면 된다. 보드가 살아 있는지 확인하거나 결과를 재현할 때 쓴다. 3장.
 
-**경로 B — 상류 소스에서 빌드해 실행한다.** GitLab 상류를 클론해 번들 실행 파일을 직접 만든다. 한 시간 가까이 걸린다. 환경을 새로 세우거나 상류 변경을 반영할 때 쓴다. 4장.
+**경로 C — ONNX 모델에서 번들을 직접 생성한다.** PC에서 양자화 보정과 컴파일을 수행해 번들을 만들고 보드로 보낸다. 새 모델을 올릴 때의 본래 경로다. 4장.
 
-**경로 C — ONNX 모델에서 번들을 직접 생성한다.** PC에서 양자화 보정과 컴파일을 수행해 번들을 만들고 보드로 보낸다. 새 모델을 올릴 때의 본래 경로다. 5장.
+**경로 D — GitHub 푸시로 자동 추론.** 경로 C를 CI로 자동화한 것이다. 모델 기술서를 푸시하면 번들 생성부터 보드 추론, 판정까지 사람 손 없이 이루어진다. 5장.
 
-**경로 D — GitHub 푸시로 자동 추론.** 경로 C를 CI로 자동화한 것이다. 모델 기술서를 푸시하면 번들 생성부터 보드 추론, 판정까지 사람 손 없이 이루어진다. 6장.
-
-연구를 이어받는 입장이라면 A로 동작을 확인하고, B로 환경을 복원하고, C로 원리를 익힌 뒤, D로 자동화에 올리는 순서를 권한다.
+A로 보드가 살아 있는지 확인하고, C로 원리를 익힌 뒤, D로 자동화에 올리는 순서를 권한다.
 
 ### 0.1 번들이 세 종류라는 점에 주의한다
 
@@ -32,7 +30,7 @@
 |---|---|---|
 | ETRI 배포본 | `/home/xilinx/nest-compiler/origin/vta/bundles/Resnet18Test/` | 보드를 받았을 때부터 있던 실행 파일. 경로 A가 돌리는 것 |
 | 자체 생성본 | PC에서 만들어 보드로 전송 | ONNX에서 직접 컴파일한 것. 파이프라인 검증용. 경로 C의 산출물 |
-| 상류 테스트용 | `~/nest-compiler-2024/build_board/vta/bundles/*/` | `aws` shim이 GitLab 미러에서 받아 온 상류 번들 소스를 보드에서 빌드한 것. 경로 B가 만드는 것 |
+| 상류 테스트용 | `~/nest-compiler-2024/build_board/vta/bundles/*/` | `aws` shim이 GitLab 미러에서 받아 온 상류 번들 소스를 보드에서 빌드한 것. 08번 문서의 경로 B가 만드는 것 |
 
 셋은 같은 모델이지만 만들어진 경로가 다르다. 자체 생성본을 만든 목적은 ResNet-18을 돌리는 것이 아니라 **정답을 아는 모델로 파이프라인을 채점하는 것**이었다. 그 결과가 5.6절이다.
 
@@ -321,7 +319,7 @@ EOF
 세 줄을 본다. 입력 이름은 `INPUT_NAME` 에, 형상은 `INPUT_SHAPE` 에 들어간다.
 형상이 `[1,3,224,224]` 처럼 채널이 앞에 있어도 Glow에는 NHWC로 적는다
 (`[1,224,224,3]`). 연산자 목록에 `Concat` 이 있으면 **지금은 올릴 수 없다.**
-VTA 백엔드가 처리하지 못한다(5.3절).
+VTA 백엔드가 처리하지 못한다(07번 보고서 5.3절).
 
 #### 2단계 — PC에서 먼저 돌려 기준값을 만든다
 
@@ -341,23 +339,21 @@ VTAInterpreter로 돌려 그 결과를 골든으로 삼는다. 하드웨어 없�
 
 여기서 나오는 클래스 번호가 `EXPECT` 에 들어갈 값이다. **보드에서 나오기를
 바라는 값이 아니라, 실제로 나온 값을 적는다.** 모델이 틀려도 그대로 적는다
-(6.3절). 이 단계를 건너뛰면 CI가 무엇을 기준으로 통과를 판단할지 알 수 없다.
+(5.3절). 이 단계를 건너뛰면 CI가 무엇을 기준으로 통과를 판단할지 알 수 없다.
 
 #### 3단계 — 저장소에 파일을 넣는다
 
-세 가지가 필요하다. ONNX, Main.cpp, 설정 파일이다.
+두 가지면 된다. ONNX와 설정 파일이다.
 
 ```powershell
 cd C:\Users\ehdgn\SOTA\nestc
 mkdir models\onnx -Force
-mkdir models\main -Force
 copy C:\Users\ehdgn\Downloads\mymodel.onnx models\onnx\
-copy ... models\main\mymodelMain.cpp
 ```
 
-Main.cpp는 상류가 번들마다 제공하는 것을 복사해 쓴다. 분류 모델이라면
-`vta/bundles/Resnet18Test/mxnet_exported_resnet18BundleMain.cpp` 를 가져와
-번들 심볼 이름을 `mymodel` 에 맞게 고친다. 아직 일반화된 main이 없다.
+**Main.cpp는 만들지 않아도 된다.** `gen-bundle.sh` 가 ResNet-18의 main을 틀로
+삼아 자동 생성한다. 분류 모델이 아니거나 출력 해석이 다르면 그때만 전용 main을
+`MAIN_CPP` 로 지정한다.
 
 ONNX가 100MB를 넘으면 GitHub가 푸시를 거부한다. 그때는 저장소에 넣지 말고
 어딘가에 올린 뒤 설정에 URL을 적는다. `MODEL_ONNX=https://.../mymodel.onnx`
@@ -378,13 +374,19 @@ IMAGE_MODE=0to255
 USE_IMAGENET_NORMALIZATION=0
 CALIB_EXTRA="-compute-softmax -topk=5"
 CALIB_IMAGES=upstream:glow/tests/images/imagenet/cat_285.png
-MAIN_CPP=repo:models/main/mymodelMain.cpp
+OUTPUT_NAME=<번들 생성 로그가 알려 준다, 아래 참고>
 EXPECT="cat_285:281 dog_207:207 zebra_340:340"   # 2단계의 실제 출력
 ```
 
 전처리 세 줄(`IMAGE_LAYOUT`, `IMAGE_MODE`, `USE_IMAGENET_NORMALIZATION`)은
 2단계에서 쓴 것과 **반드시 같아야 한다.** 보정과 실행의 전처리가 다르면
 양자화 스케일이 어긋나 엉뚱한 결과가 나온다.
+
+`OUTPUT_NAME` 은 번들이 내보내는 출력 텐서 이름이다. 미리 알기 어려우므로
+일단 비워 두고 한 번 돌린다. `gen-bundle.sh` 가 번들 생성을 마치면
+`번들이 내보내는 심볼 (OUTPUT_NAME 후보)` 목록을 찍는다. 보통 ONNX 출력 이름에
+`__1` 이 붙은 형태다(ResNet-18이면 `resnetv10_dense0_fwd__1`). 거기서 골라
+설정에 적고 다시 푸시한다.
 
 #### 5단계 — 푸시한다
 
@@ -421,9 +423,10 @@ https://github.com/SOTA-PNU/nestc-zcu102/actions 에서 방금 실행을 연다.
 | 번들 생성 | `Mismatch between input image and ONNX input shape` | `INPUT_NAME` 또는 `INPUT_SHAPE` 가 모델과 다르다. 1단계를 다시 한다 |
 | 번들 생성 | `is an unhandled instruction` 또는 조용히 중단 | VTA 백엔드가 그 연산을 모른다. Concat이 가장 흔하다 |
 | 번들 생성 | `weights.bin 이 없다` | `model-compiler` 가 실패했다. 그 위 출력을 본다 |
-| 보드 빌드 | `undefined reference to ...` | Main.cpp의 심볼 이름이 번들과 다르다 |
+| 보드 빌드 | `undefined reference to ...` | 자동 생성된 main의 접두사가 번들과 다르다. 번들 소스 파일 이름을 확인한다 |
 | 보드 실행 | 입력을 바꿔도 결과가 같다 | `transpose()` 스텁을 밟고 있다. 패치를 확인한다 |
 | 보드 실행 | `Result` 는 나오는데 기대값과 다르다 | 2단계의 전처리와 설정의 전처리가 어긋났을 가능성이 크다 |
+| 보드 실행 | 결과가 늘 0이거나 의미 없는 값 | `OUTPUT_NAME` 이 틀렸다. 번들 생성 로그의 후보 목록을 본다 |
 
 ---
 
@@ -446,7 +449,7 @@ https://github.com/SOTA-PNU/nestc-zcu102/actions 에서 방금 실행을 연다.
        ③ 컴파일·링크·실행·판정    scripts/board-build-run.sh
 ```
 
-러너를 보드가 아니라 PC에 두는 이유는 10.5절과 같다. 보드의 glibc 2.27로는
+러너를 보드가 아니라 PC에 두는 이유는 다음과 같다. 보드의 glibc 2.27로는
 GitHub Actions의 자바스크립트 액션이 돌지 않고, 가용 메모리도 615MB뿐이다.
 
 번들 생성은 반드시 **컨테이너 안에서** 한다. `model-compiler` 는 Ubuntu 20.04
@@ -470,7 +473,7 @@ IMAGE_MODE=0to255
 USE_IMAGENET_NORMALIZATION=0
 CALIB_EXTRA="-compute-softmax -topk=5"
 CALIB_IMAGES=upstream:glow/tests/images/imagenet/cat_285.png
-MAIN_CPP=repo:models/main/내모델Main.cpp
+OUTPUT_NAME=내모델출력__1
 EXPECT="cat_285:281 dog_207:207 zebra_340:340"
 ```
 
@@ -483,8 +486,9 @@ EXPECT="cat_285:281 dog_207:207 zebra_340:340"
 m=onnx.load('모델.onnx'); print(m.graph.input)"` 로 확인한다. Glow는 내부적으로
 NHWC로 다루므로 채널이 마지막에 온다.
 
-**Main.cpp.** 상류는 번들마다 전용 main을 둔다. 새 모델은 비슷한 모델의 것을
-복사해 심볼 이름을 맞춰야 한다. 아직 일반화된 main이 없다.
+**출력 텐서 이름.** `OUTPUT_NAME` 에 적는다. Main.cpp는 자동 생성되지만
+이 이름만은 접두사에서 파생되지 않아 따로 알려 주어야 한다. 모르면 비워 두고
+한 번 돌리면 `gen-bundle.sh` 가 후보 목록을 찍는다.
 
 **기대값.** 새 모델은 정답을 모르므로 판정 기준을 먼저 만들어야 한다. float
 또는 VTAInterpreter로 PC에서 돌린 결과를 골든으로 삼는다. 이것이 없으면 CI가
@@ -505,7 +509,23 @@ cat, 281은 tabby cat이므로 모델은 틀렸다. 확신도도 0.53으로 낮�
 모델이 실제로 얼마나 맞히는지는 별개의 작업이다. ImageNet 검증셋 수백 장으로
 top-1 정확도를 재야 하며, 양자화 품질을 논할 때 하면 된다.
 
-### 5.4 보드가 한 대뿐이라는 제약
+### 5.4 번들은 매번 다시 만들어야 하는가
+
+아니다. 번들은 모델과 양자화 설정의 함수이므로, 둘 중 어느 것도 바뀌지
+않았다면 다시 만들 필요가 없다. 다시 만들어야 하는 경우는 셋이다. 모델 파일이
+바뀌었을 때, 설정의 전처리나 보정 이미지가 바뀌었을 때, 그리고 컴파일러나
+상류 소스가 바뀌었을 때다. 같은 입력이면 같은 번들이 나온다.
+
+푸시로 기동할 때는 안전하게 매번 생성한다. `models/**` 가 바뀌었다는 것은
+대개 위 둘 중 하나가 바뀌었다는 뜻이기 때문이다. 손으로 돌릴 때는
+`Run workflow` 에서 `rebuild_bundle` 을 꺼서 보드에 이미 있는 번들을 재사용할
+수 있다. 보드 쪽 스크립트만 고쳤거나 실행을 한 번 더 해 보고 싶을 때 쓴다.
+
+비용도 생각만큼 크지 않다. ResNet-18 기준으로 보정이 몇 초, 번들 생성이 수십 초
+수준이다. 오래 걸리는 쪽은 보드에서의 컴파일이며, 그쪽은 번들이 바뀌지 않으면
+`make` 가 건너뛴다.
+
+### 5.5 보드가 한 대뿐이라는 제약
 
 워크플로에 `concurrency: zcu102-board` 를 걸어 두 실행이 겹치지 않게 했다.
 앞선 실행을 취소하지 않고 **기다리게** 한다. VTA 프로그램 실행 중 취소는
@@ -515,7 +535,7 @@ FPGA와 xlnk를 정리하지 못한 채 끝나므로, 재부팅 전까지 보드
 단위라 서로를 막아 주지 못한다. 개인 저장소 `udonghun/nestc` 는 미러로 두고
 Actions를 꺼 두는 편이 안전하다.
 
-### 5.5 사전 준비
+### 5.6 사전 준비
 
 러너가 있는 PC에서 한 번만 해 두면 된다.
 
@@ -541,7 +561,7 @@ echo 'xilinx ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/xilinx-ci
 sudo chmod 440 /etc/sudoers.d/xilinx-ci
 ```
 
-### 5.6 현재 검증된 범위와 남은 일
+### 5.7 현재 검증된 범위와 남은 일
 
 ResNet-18로 전 구간이 통과했다. 푸시 한 번으로 번들 생성, 전송, 보드 빌드,
 추론, 판정까지 자동으로 이루어지며 세 장 모두 기대값과 일치했다.
@@ -549,7 +569,7 @@ ResNet-18로 전 구간이 통과했다. 푸시 한 번으로 번들 생성, 전
 남은 것이 셋 있다.
 
 **추론이 느리다.** 1477ms가 나오는데 ETRI 배포 번들은 110ms다. 13배 차이는
-generic과 aarch64 CPU 폴백의 차이와 일치한다(10.2절). 보드 빌드 디렉터리를
+generic과 aarch64 CPU 폴백의 차이와 일치한다(07번 보고서 10.2절). 보드 빌드 디렉터리를
 `build_aarch64` 로 바꾸면 해결될 것으로 보인다.
 
 **확신도가 배포본과 다르다.** 0.533373 대 0.478113이다. 상류는
@@ -558,9 +578,8 @@ generic과 aarch64 CPU 폴백의 차이와 일치한다(10.2절). 보드 빌드 
 없다. 클래스는 맞으므로 치명적이지 않으나, 배포본과 비트 단위로 맞추려면
 넣어야 한다.
 
-**Main.cpp가 모델마다 필요하다.** 일반화하지 못했다. `-bundle-api=dynamic` 은
-실행 시점에 심볼을 찾는 구조이므로 일반 main을 쓸 수 있을 것으로 보이나
-확인하지 않았다.
+(2026-10-08 해결) **Main.cpp 일반화.** 모델마다 전용 main을 두던 것을
+접두사 치환으로 자동 생성하게 바꾸었다. ResNet-18로 검증했다.
 
 ---
 
@@ -599,4 +618,4 @@ generic과 aarch64 CPU 폴백의 차이와 일치한다(10.2절). 보드 빌드 
 
 ## 8. 관련 문서
 
-부팅과 콘솔 설정은 `01-boot-setup.md`, 실행 세부와 번들 구성은 `02-run-resnet18.md`, 빌드 옵션과 LLVM 제약은 `03-build-notes.md`, SD 카드 백업은 `04-backup.md`, ResNet-50 디버깅 전 과정은 `05-model-debugging.md`, NEST-C 구조 학습은 `06-nestc-study-guide.md`, 전체 경과와 로드맵은 `07-progress-report.md` 를 참조한다.
+상류 소스 빌드(경로 B)와 전체 매뉴얼은 `08-resnet18-manual.md`, 부팅과 콘솔 설정은 `01-boot-setup.md`, 실행 세부와 번들 구성은 `02-run-resnet18.md`, 빌드 옵션과 LLVM 제약은 `03-build-notes.md`, SD 카드 백업은 `04-backup.md`, ResNet-50 디버깅 전 과정은 `05-model-debugging.md`, NEST-C 구조 학습은 `06-nestc-study-guide.md`, 전체 경과와 로드맵은 `07-progress-report.md` 를 참조한다.
