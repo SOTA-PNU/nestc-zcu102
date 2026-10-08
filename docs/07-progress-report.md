@@ -378,3 +378,312 @@ Tiny YOLOv2를 이식한다. 구성 연산(convolution, max pooling, leaky ReLU,
 **연락처.** 과제 책임자 `yongin.kwon@etri.re.kr`. 결함 보고와 패치 제출 경로이다.
 
 **관련 문서.** 보드 설정은 `01-boot-setup.md`, 실행 절차는 `02-run-resnet18.md`, 빌드 관련 사항은 `03-build-notes.md`, 백업은 `04-backup.md`, ResNet-50 디버깅 전 과정은 `05-model-debugging.md` 를 참조한다.
+
+---
+
+## 10. 상류 재현과 CI 구축 (2026-10-07 추가)
+
+4절까지는 ETRI 배포 번들과 자체 생성 번들을 보드에서 실행하는 데 초점이 있었다. 이후 작업에서는 **상류 저장소 전체를 보드에 재현하고, 그것을 자동으로 검증하는 체계**를 세웠다. 교수님의 "GitLab에 있던 원래 서버를 이 보드에 복구"라는 요구에 대한 결과물이다.
+
+### 10.1 재현 결과
+
+GitLab `ones-ai/nest-compiler` 2024-07-09 상류를 보드에 클론하여 빌드하고, ZCU102 라벨이 붙은 테스트 전체를 실행하였다.
+
+```
+100% tests passed, 0 tests failed out of 51
+Total Test time (real) =  12.40 sec
+```
+
+5년 전 FPGA 비트스트림과 2024년 상류 소스가 그대로 호환됨을 51개 테스트 전수로 확인한 것이다. 4절의 "설정값이 일치한다"는 서류상 확인을 실측으로 대체하였다.
+
+### 10.2 두 CPU 폴백 경로의 비교
+
+NEST-C는 VTA가 처리하지 못하는 연산을 CPU로 넘긴다. 이 CPU 구현이 두 가지이며 `NESTC_EVTA_RUN_WITH_GENERIC_BUNDLE` 로 전환된다. ON이면 이식성 우선의 generic C++ 참조 구현, OFF이면 aarch64 NEON과 ARM Compute Library를 쓰는 최적화 구현이다. 상류 CI는 이 중 generic만 돌렸고 aarch64 경로는 한 번도 검증된 적이 없다.
+
+두 경로를 같은 트리에서 별도 빌드 디렉터리로 나란히 측정하였다.
+
+| | generic | aarch64 |
+|---|---|---|
+| ZCU102 테스트 수 | 51 | 50 |
+| 통과 | 51 | 48 |
+| ctest 총 시간 | 12.40초 | 6.45초 |
+| ResNet-50 추론 | 1989.5ms | **487.4ms** |
+
+ResNet-50 세 장의 분류 결과는 두 경로가 일치한다.
+
+| 입력 | generic | aarch64 |
+|---|---|---|
+| cat_285.png | 281 (0.665328) | 281 (0.658912) |
+| dog_207.png | 207 (0.583738) | 207 (0.685082) |
+| zebra_340.png | 340 (0.991000) | 340 (0.991693) |
+
+**aarch64 경로가 4.08배 빠르다.** 확신도의 소수점 차이는 재양자화 반올림 방식의 차이에서 오며 10.4절에서 다룬다.
+
+### 10.3 상류는 aarch64에서 ResNet-50을 의도적으로 제외하였다
+
+`vta/bundles/Resnet50Test/CMakeLists.txt:84`
+
+```cmake
+if(NESTC_EVTA_RUN_WITH_GENERIC_BUNDLE)
+    add_nestc_test(ZCU102 NAME vtaCaffe2Resnet50Bundle ...)
+else()
+    add_nestc_test(NAME vtaCaffe2Resnet50Bundle ...)
+endif()
+```
+
+aarch64 경로에서는 ZCU102 라벨을 떼어 보드 테스트 집합에서 제외한다. 라벨이 없으면 `zcu102` 집계 타깃의 의존에서도 빠지므로 **바이너리 자체가 빌드되지 않는다.** aarch64의 테스트 수가 51이 아니라 50인 이유가 이것이다.
+
+ResNet-50은 avgpool과 FC 사이에서 `transpose()` 를 호출하는데, 5.1절에서 다룬 대로 상류의 aarch64 구현은 그 함수가 미구현 스텁이다. 즉 상류는 이 모델이 aarch64에서 동작하지 않음을 알고 있었고, 수정 대신 테스트에서 제외하는 쪽을 택하였다. 5.1절에서 제기한 "이 결함이 CI에서 한 번도 밟히지 않았다"는 추정의 직접 증거이다.
+
+패치를 적용한 뒤 해당 타깃을 수동으로 빌드하여 실행한 결과가 10.2절의 표이다. 세 장이 각각 다른, 그리고 올바른 클래스를 산출한다. 패치 이전이라면 입력과 무관하게 동일한 클래스가 나온다.
+
+**상류가 포기한 모델을 복구한 것이 이 작업의 결과이다.**
+
+### 10.4 aarch64 실패 2건의 성격
+
+**`vtaFCTestBundle_compare` — 테스트 기준의 문제이다.** 출력 1000바이트 중 48바이트가 골든과 다르나 모두 정확히 1씩, 일관되게 aarch64 쪽이 크다. int32 누산을 int8로 재양자화할 때 generic의 절삭과 NEON의 반올림이 경계값에서 갈리는, 양자화 구현에서 정상 범위의 차이다. 문제는 `*_compare` 테스트가 `cmp` 로 바이트 단위 완전 일치를 요구한다는 점이다. 골든이 generic으로 생성된 이상 수치 경로가 다른 aarch64는 구조적으로 통과할 수 없다. 허용 오차 비교나 top-1 일치로 바꾸어야 한다.
+
+**`vtaVGG16Cifar10Bundle` — 실제 결함이다.** `[ERROR] invalid layout` 을 출력하고 airplane(0)을 2로 분류한다(확신도 0.907). 원인은 `vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:4051` 의 전제 조건이다.
+
+```c
+if(inputDim1 != kernelDim0 || inputDim1%16 != 0 || kernelDim1%4 != 0) {
+    printf("[ERROR] invalid layout\n");
+    return -1;
+}
+```
+
+NEON 벡터화를 위해 입력 차원이 16의 배수, 출력 차원이 4의 배수여야 한다. VGG16-CIFAR10의 최종 FC는 출력이 10 클래스라 조건을 만족하지 못한다. 함수는 아무 계산도 하지 않고 `-1` 을 반환하는데 **호출부가 반환값을 검사하지 않아** 초기화되지 않은 출력 버퍼로 분류가 진행된다.
+
+5.1절의 `transpose()` 와 동일한 패턴이다. 실패를 반환하지만 아무도 확인하지 않는다. 5.2절의 `llvm_unreachable` 과 함께 보면, **이 코드베이스는 오류 경로를 신뢰할 수 없다**는 일관된 성질을 가진다. 새 모델을 시도할 때 "틀린 답이 조용히 나오는" 상황을 항상 의심해야 한다는 뜻이다.
+
+### 10.5 CI
+
+상류 `.gitlab-ci.yml` 의 `test-board` 스테이지는 cmake 설정까지만 하고 `sudo make check_zcu102` 가 주석 처리되어 있다. 보드 테스트가 실제로 실행된 적이 없다는 의미이며, 5.1절과 10.4절의 결함이 장기간 남아 있던 이유이다.
+
+이를 GitHub Actions로 이식하면서 실행까지 포함하도록 복원하였다.
+
+```
+.github/workflows/build.yml        컴파일러 빌드 (GitHub 호스티드 러너)
+.github/workflows/board-test.yml   ZCU102 보드 테스트 (self-hosted 러너)
+ci/patch_transpose.py              상류 transpose 결함 패치 (멱등)
+```
+
+원본과 달라진 점이 셋이다. 첫째, 보드 테스트를 실제로 실행한다. 둘째, 삭제된 S3를 GitLab 미러로 우회하는 shim을 사용한다(11.2절). 셋째, generic과 aarch64 두 경로를 모두 돌리고 aarch64의 알려진 실패 2건만 허용하며, 그 외 실패가 나오면 즉시 실패 처리한다. 더하여 상류가 제외한 ResNet-50을 aarch64에서 직접 빌드·실행하여 세 장의 분류 결과를 검증하는 단계를 두었다. transpose 패치가 깨지면 이 단계가 잡는다.
+
+**러너는 보드가 아니라 PC에 둔다.** 보드는 Ubuntu 18.04(glibc 2.27)이고, GitHub Actions의 자바스크립트 액션은 Node 20을 요구하는데 Node 20은 glibc 2.28 이상을 필요로 한다. 가용 메모리도 615MB뿐이라 러너 프로세스가 빌드와 충돌한다. PC(WSL x64)의 러너가 SSH로 보드에 명령만 보내는 구조로 두 문제를 모두 회피하였다.
+
+---
+
+## 11. 인수인계 — 처음부터 따라 하는 절차
+
+이 절만 따라 하면 새로 합류한 사람이 동일한 환경을 재현할 수 있다. 각 단계는 앞 단계가 끝난 것을 전제한다.
+
+### 11.0 터미널 구분
+
+작업 중 세 종류의 창을 오가게 된다. 프롬프트로 구분한다.
+
+| 프롬프트 | 어디 | 용도 |
+|---|---|---|
+| `xilinx@pynq:~$` | ZCU102 보드 | 빌드와 실행 |
+| `ehdgns@...:~$` | PC의 WSL | 번들 생성, CI 러너 |
+| `PS C:\...>` | PowerShell | git 작업 |
+
+**명령을 치기 전에 프롬프트를 확인하는 습관**을 들이는 편이 좋다. 창을 혼동해 보드 명령을 WSL에서 실행하는 실수가 반복되었다.
+
+### 11.1 보드 접속
+
+보드는 사설망(`192.168.1.40`) 뒤에 있고 외부에서는 포워딩을 통해 접근한다.
+
+```sh
+ssh xilinx@sota.pusan.ac.kr -p 25022
+```
+
+긴 작업은 반드시 tmux 안에서 한다. SSH가 끊겨도 살아남는다.
+
+```sh
+tmux new -s work          # 새 세션
+tmux attach -t work       # 다시 붙기
+# Ctrl+B 다음 D 로 빠져나오기
+```
+
+**VTA 프로그램 실행 중에는 Ctrl+C를 누르지 않는다.** FPGA와 커널 메모리 할당기(xlnk)가 정리되지 않아 재부팅 전까지 보드를 사용할 수 없다. 빌드(컴파일) 중단은 안전하다.
+
+### 11.2 aws shim 설치 (보드)
+
+ETRI가 쓰던 S3 버킷 `nestc-data-pub` 은 삭제되어 `NoSuchBucket` 을 반환한다. 동일한 내용 198개 파일이 GitLab `yongin.kwon/nestc-data` 에 남아 있고 경로가 1:1로 대응하므로, `aws` 명령을 흉내 내는 shim을 두어 CMakeLists를 수정하지 않고 통과시킨다.
+
+```sh
+mkdir -p ~/bin
+cat > ~/bin/aws <<'EOF'
+#!/bin/sh
+BASE=https://gitlab.com/yongin.kwon/nestc-data/-/raw/master
+if [ "$1" = "s3" ] && [ "$2" = "cp" ]; then
+  SRC=$3; DST=$4
+  case "$SRC" in
+    s3://nestc-data-pub/*) P=${SRC#s3://nestc-data-pub/} ;;
+    s3://nestc-pub/*)      P=${SRC#s3://nestc-pub/} ;;
+    *) echo "aws-shim: 지원하지 않는 경로 $SRC" >&2; exit 1 ;;
+  esac
+  mkdir -p "$(dirname "$DST")" 2>/dev/null
+  curl -fL "$BASE/$P" -o "$DST" || { echo "aws-shim: 실패 $P" >&2; exit 1; }
+  exit 0
+fi
+exit 0
+EOF
+chmod +x ~/bin/aws
+export PATH=$HOME/bin:$PATH
+```
+
+`export PATH` 는 보드에서 빌드하는 모든 셸에서 필요하다. `~/.bashrc` 에 넣어두면 편하다.
+
+`s3://nestc-pub/vta/bundles/ResConv*Test/` 만 GitLab 미러가 없어 ResConv 1~10 테스트는 이 경로로 복구되지 않는다. 현재 ZCU102 테스트 집합에는 포함되지 않으므로 영향이 없다.
+
+### 11.3 상류 클론과 패치 (보드)
+
+```sh
+git clone --recursive https://gitlab.com/ones-ai/nest-compiler.git ~/nest-compiler-2024
+```
+
+1.1GB 정도이며 시간이 걸린다. 그다음 5.1절의 transpose 결함을 고친다. 저장소의 `ci/patch_transpose.py` 를 보드로 복사해 실행하면 된다. 멱등하므로 여러 번 돌려도 안전하다.
+
+```sh
+python3 patch_transpose.py ~/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+grep -c at8dim_nestc_patch ~/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+```
+
+마지막 줄이 `3` 이면 적용된 것이다(함수 정의 1 + 호출 2).
+
+### 11.4 빌드와 테스트 (보드)
+
+generic 경로와 aarch64 경로는 CPU 폴백 구현 전체가 달라 오브젝트를 공유할 수 없다. **반드시 별도 디렉터리**에 둔다.
+
+```sh
+cat > ~/run-build.sh <<'EOF'
+set -e
+export PATH=$HOME/bin:$PATH
+cd ~/nest-compiler-2024
+mkdir -p build_board && cd build_board
+cmake .. \
+  -DNESTC_WITH_EVTA=ON \
+  -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DNESTC_USE_VTASIM=OFF \
+  -DVTA_RESNET18_WITH_SKIPQUANT0=ON \
+  -DNESTC_EVTA_RUN_ON_ZCU102=ON \
+  -DNESTC_USE_PRECOMPILED_BUNDLE=ON \
+  -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON
+make -j1 zcu102 || true
+echo DONE
+EOF
+chmod +x ~/run-build.sh
+tmux new -d -s bld '~/run-build.sh > ~/bld.log 2>&1'
+```
+
+aarch64를 측정하려면 `build_board` 를 `build_aarch64` 로, 마지막 플래그를 `OFF` 로 바꾼 사본을 쓴다.
+
+진행 확인은 이렇게 한다.
+
+```sh
+tail -3 ~/bld.log
+grep -cE 'error:' ~/bld.log      # 실제 컴파일 에러 수
+grep -c 'aws-shim' ~/bld.log     # shim 호출 수
+```
+
+보드에서 `-j1` 로 한 시간 가까이 걸린다. 끝나면 테스트를 실행한다.
+
+```sh
+tmux new -s chk
+cd ~/nest-compiler-2024/build_board
+sudo -E env PATH=$HOME/bin:$PATH ctest -L ZCU102 --output-on-failure 2>&1 | tee ~/check.log
+```
+
+### 11.5 흔히 빠지는 함정
+
+**`make` 전체 빌드를 하지 않는다.** 아무 인자 없이 `make -j1` 을 돌리면 TVM 전체와 Glow 컴파일러 본체를 만들기 시작한다. 보드는 `NESTC_USE_PRECOMPILED_BUNDLE=ON` 이라 `model-compiler` 가 필요 없고, `check_zcu102` 는 `DEPENDS ${ZCU102_TEST_DEPENDS}` 로 테스트 바이너리에만 의존한다(`CMakeLists.txt:182`). 전체 빌드는 수 시간을 쓰고 LLVM 8.0의 RTTI 불일치에 부딪힐 뿐이다. `make zcu102` 만 하면 된다.
+
+**`zcu102` 는 빌드 타깃이 아니라 실행 타깃이다.** 빌드 후 끝에 ctest를 실행한다. 비root로 돌리면 `/dev/xlnk` 와 VTA 레지스터에 접근하지 못해 전부 실패하고 make는 `Error 8`(ctest의 종료 코드)로 끝난다. 이것을 빌드 실패로 오인하기 쉽다. **make의 `Error N` 은 자식 프로세스의 종료 코드일 뿐 컴파일 에러가 아니다.** 실제 컴파일 에러는 `grep -cE 'error:'` 로 확인한다.
+
+**`| tail -N` 로 빌드를 보지 않는다.** 파이프 버퍼링 때문에 출력이 멈춘 것처럼 보여 멀쩡한 빌드를 중단하게 된다. `tee` 로 로그 파일에 남기고 별도 창에서 `tail` 한다.
+
+**동시에 두 개의 `make` 를 돌리지 않는다.** 가용 메모리 1.5GB에서 `cc1plus` 두 개가 뜨면 바로 한계에 닿는다. 중단한 빌드의 유령 프로세스가 남아 있는지 `pgrep -a cc1plus` 로 확인하는 습관이 필요하다.
+
+**`NESTC_USE_PRECOMPILED_EVTA_LIBRARY=ON` 을 쓰지 않는다.** 공식 install.md에 있으나 S3가 죽어 404로 실패한다. 기본값 OFF면 서브모듈 소스에서 빌드하여 정상 동작한다. 공식 문서의 다른 부분도 같은 이유로 신뢰할 수 없다.
+
+**`/home/xilinx/nest-compiler/exec1` 에서 빌드하지 않는다.** cmake 캐시에 `-fno-rtti` 가 오염되어 있다.
+
+### 11.6 PC 측 번들 생성 환경 (WSL + Docker)
+
+4.2절의 명령을 실행할 환경이다. ETRI 공식 SDK 이미지를 쓴다.
+
+```sh
+docker pull onesai1/nest-compiler-sdk:1.0.0
+```
+
+이 이미지는 Ubuntu 20.04, clang 8.0.1, llvm-8, aarch64 크로스 컴파일러, onnxruntime 1.12.1을 포함한다. 정의는 `gitlab.com/ones-ai/nest-compiler-sdk` 에 있다.
+
+보정 프로파일은 **받는 것이 아니라 생성하는 것**이다. `-dump-profile` 로 VTAInterpreter를 돌려 레이어별 Min/Max/Histogram을 수집한다. 이 사실을 몰라 이틀을 소모하였으므로 특히 강조해 둔다.
+
+### 11.7 CI 설정
+
+러너는 PC의 WSL에 둔다(10.5절). 저장소 Settings → Actions → Runners → New self-hosted runner에서 Linux / x64를 선택하고 안내대로 진행한 뒤 서비스로 등록한다.
+
+```sh
+sudo ./svc.sh install && sudo ./svc.sh start
+```
+
+보드 접속용 키를 만들고 공개키를 보드에 등록한다.
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/board_ci -N ""
+cat ~/.ssh/board_ci.pub       # 이 한 줄을 보드의 ~/.ssh/authorized_keys 에 추가
+ssh -i ~/.ssh/board_ci -p 25022 xilinx@sota.pusan.ac.kr 'echo OK'
+```
+
+**마지막 확인이 WSL에서 성공해야 한다.** WSL2는 자체 NAT를 쓰므로 보드의 사설 주소 `192.168.1.40` 에는 닿지 않는다. 반드시 포워딩 주소(`sota.pusan.ac.kr:25022`)를 사용한다. 이 점을 몰라 CI 첫 실행이 `Connection timed out` 으로 실패하였다.
+
+저장소 시크릿 네 개를 등록한다.
+
+| 이름 | 값 |
+|---|---|
+| `BOARD_HOST` | `sota.pusan.ac.kr` |
+| `BOARD_PORT` | `25022` |
+| `BOARD_USER` | `xilinx` |
+| `BOARD_SSH_KEY` | `cat ~/.ssh/board_ci` 출력 전체 |
+
+보드에서 sudo 비밀번호를 생략하도록 설정한다. 워크플로가 `sudo ctest` 를 비대화식으로 실행하기 때문이다.
+
+```sh
+echo 'xilinx ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/xilinx-ci
+sudo chmod 440 /etc/sudoers.d/xilinx-ci
+sudo -n true && echo NOPASSWD-OK
+```
+
+Actions 탭에서 `board-test` 를 `Run workflow` 로 실행한다. 첫 실행은 두 경로를 처음부터 빌드하므로 두 시간가량 걸리고, 이후에는 증분이라 훨씬 짧다.
+
+**토큰과 키는 터미널과 시크릿 입력란에만 입력한다.** 채팅이나 문서에 붙여넣지 않는다. 노출된 자격 증명은 즉시 폐기하고 재발급한다.
+
+---
+
+## 12. 현재 상태 갱신 (2026-10-07 기준)
+
+**동작하는 것.** ResNet-18과 ResNet-50이 VTA에서 정상 추론한다. 상류 51개 ZCU102 테스트가 generic 경로에서 전수 통과한다. aarch64 경로는 48/50이며 실패 2건의 원인이 모두 규명되어 있다. 자체 번들 생성 파이프라인이 ETRI 배포 번들과 동일한 결과를 산출한다. CI가 두 경로를 자동 검증한다.
+
+**막혀 있는 것.** VTA 백엔드에 `TouchInst` 와 `InsertTensorInst` 가 구현되어 있지 않아 Concat을 처리하지 못한다(5.3절). SqueezeNet, Inception, DenseNet이 여기서 막힌다. 7절 로드맵의 1단계가 이것이다.
+
+**아직 하지 않은 것.** 상류 결함 보고 세 건(`transpose()` 미구현, aarch64 FC의 반환값 미검사, `*_compare` 의 바이트 단위 비교). 수신처는 `yongin.kwon@etri.re.kr` 이다. 세 건 모두 재현 절차와 수정안이 준비되어 있다.
+
+---
+
+## 13. 저장소
+
+```
+.github/workflows/      CI 정의
+ci/patch_transpose.py   상류 transpose 결함 패치
+ci-templates/           CI 템플릿과 설명
+docs/                   01~07 문서
+patches/                상류 패치 모음
+scripts/                보조 스크립트
+backups/                설정 백업
+```
+
+개인 원본은 `github.com/udonghun/nestc`, 연구실 저장소는 `github.com/SOTA-PNU/nestc-zcu102` 이며 두 곳에 동일하게 푸시한다. CI는 후자에 등록되어 있다.
