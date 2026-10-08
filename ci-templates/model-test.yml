@@ -17,6 +17,15 @@ name: model-test
 #   둘 다 없으면 build 워크플로의 nestc-tools 아티팩트를 쓴다.
 
 on:
+  # 모델 기술서나 파이프라인 스크립트가 바뀌면 자동으로 돈다.
+  # 보드가 하나뿐이라 동시 실행을 막는다(아래 concurrency).
+  push:
+    branches: [main]
+    paths:
+      - "models/**"
+      - "scripts/gen-bundle.sh"
+      - "scripts/board-build-run.sh"
+      - ".github/workflows/model-test.yml"
   workflow_dispatch:
     inputs:
       model:
@@ -28,16 +37,25 @@ on:
         type: boolean
         default: true
 
+# 보드는 한 대뿐이다. 두 실행이 겹치면 VTA 가 충돌한다.
+# 앞선 실행을 취소하지 않고 기다리게 한다 — VTA 실행 중 취소는 위험하다.
+concurrency:
+  group: zcu102-board
+  cancel-in-progress: false
+
 jobs:
   model:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 180
 
     env:
-      CONF: models/${{ inputs.model }}.conf
+      # push 로 돌 때는 inputs 가 비어 있으므로 resnet18 을 기본으로 한다.
+      # 여러 모델을 다루게 되면 matrix 로 바꾼다.
+      CONF: models/${{ inputs.model || 'resnet18' }}.conf
+      MODEL: ${{ inputs.model || 'resnet18' }}
       BOARD_SRC: /home/xilinx/nest-compiler-2024
       BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_board
-      BOARD_BUNDLE: /home/xilinx/bundles/${{ inputs.model }}
+      BOARD_BUNDLE: /home/xilinx/bundles/${{ inputs.model || 'resnet18' }}
       OUT: ${{ github.workspace }}/bundle-out
 
     steps:
@@ -74,7 +92,7 @@ jobs:
       # 러너에 이미 빌드된 컴파일러가 있으면 그것을 쓴다.
       # 없으면 build 워크플로가 올려 둔 아티팩트를 내려받는다.
       - name: 컴파일러 확보
-        if: inputs.rebuild_bundle
+        if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
           UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
@@ -90,7 +108,7 @@ jobs:
           echo "NESTC_TOOLS=$TOOLS" >> "$GITHUB_ENV"
 
       - name: 번들 생성
-        if: inputs.rebuild_bundle
+        if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
           chmod +x scripts/gen-bundle.sh
@@ -101,7 +119,7 @@ jobs:
             --out "$OUT"
 
       - name: 보드로 전송
-        if: inputs.rebuild_bundle
+        if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
           ssh board "mkdir -p $BOARD_BUNDLE"
@@ -124,13 +142,13 @@ jobs:
               --bundle $BOARD_BUNDLE \
               --src $BOARD_SRC \
               --build $BOARD_BUILD \
-              2>&1 | tee /home/xilinx/model-${{ inputs.model }}.log"
+              2>&1 | tee /home/xilinx/model-${{ inputs.model || 'resnet18' }}.log"
 
       - name: 로그 회수
         if: always()
         run: |
           mkdir -p logs
-          scp board:/home/xilinx/model-${{ inputs.model }}.log logs/ 2>/dev/null || true
+          scp board:/home/xilinx/model-${{ inputs.model || 'resnet18' }}.log logs/ 2>/dev/null || true
           cp -r "$OUT"/calib.yaml logs/ 2>/dev/null || true
           ls -la logs/
 
@@ -138,7 +156,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: model-${{ inputs.model }}
+          name: model-${{ inputs.model || 'resnet18' }}
           path: logs/
           retention-days: 30
 
