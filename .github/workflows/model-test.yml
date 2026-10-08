@@ -57,6 +57,9 @@ jobs:
       BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_board
       BOARD_BUNDLE: /home/xilinx/bundles/${{ inputs.model || 'resnet18' }}
       OUT: ${{ github.workspace }}/bundle-out
+      # 컴파일러를 빌드한 것과 같은 이미지여야 한다.
+      # 라이브러리 버전이 다르면 실행조차 되지 않는다.
+      DOCKER_IMAGE: leejaymin/nestc-ssh:latest
 
     steps:
       - uses: actions/checkout@v4
@@ -89,34 +92,45 @@ jobs:
           chmod 600 ~/.ssh/config
           ssh board 'uname -m; free -h | head -2'
 
-      # 러너에 이미 빌드된 컴파일러가 있으면 그것을 쓴다.
-      # 없으면 build 워크플로가 올려 둔 아티팩트를 내려받는다.
-      - name: 컴파일러 확보
+      # 컴파일러는 컨테이너(Ubuntu 20.04) 안에서 빌드되었으므로
+      # 러너의 WSL(22.04)에서는 libprotobuf.so.17 을 찾지 못해 실행되지 않는다.
+      # 그래서 번들 생성은 반드시 같은 이미지 안에서 돌린다.
+      - name: 컴파일러 확인
         if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
           UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
           TOOLS=${NESTC_TOOLS:-$UP/build/glow/bin}
-          if [ -x "$TOOLS/model-compiler" ] && [ -x "$TOOLS/image-classifier" ]; then
-            echo "로컬 컴파일러 사용: $TOOLS"
-          else
-            echo "로컬에 컴파일러가 없다. build 워크플로의 아티팩트가 필요하다." >&2
-            echo "Actions 에서 build 를 먼저 실행하거나, $TOOLS 를 준비한다." >&2
-            exit 1
-          fi
+          [ -x "$TOOLS/model-compiler" ] && [ -x "$TOOLS/image-classifier" ] || {
+            echo "컴파일러가 없다: $TOOLS" >&2
+            echo "docs/03-build-notes.md 를 따라 컨테이너에서 먼저 빌드한다." >&2
+            exit 1; }
           echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
-          echo "NESTC_TOOLS=$TOOLS" >> "$GITHUB_ENV"
+          # 컨테이너 안에서의 경로다. 호스트 경로가 아니다.
+          echo "TOOLS_IN_CONTAINER=/root/nestc/build/glow/bin" >> "$GITHUB_ENV"
+          docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 || docker pull "$DOCKER_IMAGE"
 
-      - name: 번들 생성
+      # 마운트가 둘이다.
+      #   상류 트리  -> /root/nestc   (ONNX, 보정 이미지, Main.cpp, 컴파일러)
+      #   작업 공간  -> /work         (모델 기술서, 스크립트, 출력)
+      # --user 로 호스트 사용자 권한을 유지해, 출력이 root 소유로 남지 않게 한다.
+      - name: 번들 생성 (컨테이너)
         if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
-          chmod +x scripts/gen-bundle.sh
-          scripts/gen-bundle.sh \
-            --conf "$CONF" \
-            --tools "$NESTC_TOOLS" \
-            --upstream "$NESTC_UPSTREAM" \
-            --out "$OUT"
+          mkdir -p "$OUT"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$NESTC_UPSTREAM":/root/nestc \
+            -v "$GITHUB_WORKSPACE":/work \
+            -w /work \
+            "$DOCKER_IMAGE" \
+            bash scripts/gen-bundle.sh \
+              --conf "$CONF" \
+              --tools "$TOOLS_IN_CONTAINER" \
+              --upstream /root/nestc \
+              --out /work/bundle-out
+          ls -la "$OUT"
 
       - name: 보드로 전송
         if: inputs.rebuild_bundle || github.event_name == 'push'
