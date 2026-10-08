@@ -1,0 +1,147 @@
+name: model-test
+
+# 새 모델을 번들로 만들어 보드에서 추론까지 시키고 결과를 판정한다.
+#
+# board-test 가 상류 테스트의 회귀를 막는 장치라면, 이쪽은 우리가 올리는
+# 모델을 위한 것이다. 모델 하나는 models/<이름>.conf 하나로 기술한다.
+#
+# 러너는 PC(WSL x64) 의 self-hosted 다. 보드는 Ubuntu 18.04(glibc 2.27)라
+# Node 20 기반 액션이 돌지 않고 가용 메모리도 615MB 뿐이다.
+#
+# 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
+#
+# 러너 쪽 사전 준비:
+#   NESTC_UPSTREAM  상류 클론 (기본 ~/nestc-upstream)
+#   NESTC_TOOLS     model-compiler 와 image-classifier 가 있는 디렉터리
+#                   (기본 $NESTC_UPSTREAM/build/glow/bin)
+#   둘 다 없으면 build 워크플로의 nestc-tools 아티팩트를 쓴다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "models/ 아래 conf 이름 (확장자 제외)"
+        type: string
+        default: resnet18
+      rebuild_bundle:
+        description: "번들을 다시 생성 (끄면 보드에 있는 것을 재사용)"
+        type: boolean
+        default: true
+
+jobs:
+  model:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 180
+
+    env:
+      CONF: models/${{ inputs.model }}.conf
+      BOARD_SRC: /home/xilinx/nest-compiler-2024
+      BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_board
+      BOARD_BUNDLE: /home/xilinx/bundles/${{ inputs.model }}
+      OUT: ${{ github.workspace }}/bundle-out
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 모델 기술서 확인
+        run: |
+          set -eu
+          [ -f "$CONF" ] || { echo "없는 모델: $CONF"; ls models/; exit 1; }
+          echo "--- $CONF ---"
+          grep -v '^#' "$CONF" | grep -v '^$'
+
+      - name: SSH 준비
+        run: |
+          set -eu
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOARD_SSH_KEY }}" > ~/.ssh/board_key
+          chmod 600 ~/.ssh/board_key
+          cat > ~/.ssh/config <<EOF
+          Host board
+            HostName ${{ secrets.BOARD_HOST }}
+            Port ${{ secrets.BOARD_PORT }}
+            User ${{ secrets.BOARD_USER }}
+            IdentityFile ~/.ssh/board_key
+            ServerAliveInterval 60
+            ServerAliveCountMax 10
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh board 'uname -m; free -h | head -2'
+
+      # 러너에 이미 빌드된 컴파일러가 있으면 그것을 쓴다.
+      # 없으면 build 워크플로가 올려 둔 아티팩트를 내려받는다.
+      - name: 컴파일러 확보
+        if: inputs.rebuild_bundle
+        run: |
+          set -eu
+          UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
+          TOOLS=${NESTC_TOOLS:-$UP/build/glow/bin}
+          if [ -x "$TOOLS/model-compiler" ] && [ -x "$TOOLS/image-classifier" ]; then
+            echo "로컬 컴파일러 사용: $TOOLS"
+          else
+            echo "로컬에 컴파일러가 없다. build 워크플로의 아티팩트가 필요하다." >&2
+            echo "Actions 에서 build 를 먼저 실행하거나, $TOOLS 를 준비한다." >&2
+            exit 1
+          fi
+          echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
+          echo "NESTC_TOOLS=$TOOLS" >> "$GITHUB_ENV"
+
+      - name: 번들 생성
+        if: inputs.rebuild_bundle
+        run: |
+          set -eu
+          chmod +x scripts/gen-bundle.sh
+          scripts/gen-bundle.sh \
+            --conf "$CONF" \
+            --tools "$NESTC_TOOLS" \
+            --upstream "$NESTC_UPSTREAM" \
+            --out "$OUT"
+
+      - name: 보드로 전송
+        if: inputs.rebuild_bundle
+        run: |
+          set -eu
+          ssh board "mkdir -p $BOARD_BUNDLE"
+          scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf \
+            board:"$BOARD_BUNDLE/"
+          ssh board "ls -la $BOARD_BUNDLE"
+
+      - name: 스크립트 전송
+        run: |
+          scp scripts/board-build-run.sh board:/home/xilinx/board-build-run.sh
+          ssh board "chmod +x /home/xilinx/board-build-run.sh"
+
+      # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
+      # 재부팅 전까지 사용 불가 상태가 될 수 있다.
+      - name: 보드에서 빌드하고 실행
+        run: |
+          ssh board "set -eu
+            export PATH=\$HOME/bin:\$PATH
+            /home/xilinx/board-build-run.sh \
+              --bundle $BOARD_BUNDLE \
+              --src $BOARD_SRC \
+              --build $BOARD_BUILD \
+              2>&1 | tee /home/xilinx/model-${{ inputs.model }}.log"
+
+      - name: 로그 회수
+        if: always()
+        run: |
+          mkdir -p logs
+          scp board:/home/xilinx/model-${{ inputs.model }}.log logs/ 2>/dev/null || true
+          cp -r "$OUT"/calib.yaml logs/ 2>/dev/null || true
+          ls -la logs/
+
+      - name: 로그 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-${{ inputs.model }}
+          path: logs/
+          retention-days: 30
+
+      - name: 키 정리
+        if: always()
+        run: rm -f ~/.ssh/board_key

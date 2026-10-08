@@ -1,13 +1,22 @@
 name: build
 
-# GitLab CI 의 .builds / build 스테이지를 GitHub Actions 로 옮긴 것.
+# 상류 NEST-C 컴파일러(model-compiler, image-classifier)를 빌드한다.
+# GitLab CI 의 .builds / build 스테이지를 옮긴 것이며,
 # 빌드 이미지는 ETRI 공식 SDK(onesai1/nest-compiler-sdk)를 그대로 쓴다.
+#
+# 이 저장소는 문서와 CI 만 담고 있고 컴파일러 소스가 없다.
+# 그래서 상류를 워크플로 안에서 클론해 빌드한다.
+# 산출물은 아티팩트로 올라가며, model-test 워크플로가 그것을 내려받아 쓴다.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "상류 브랜치 또는 커밋"
+        type: string
+        default: main
+  schedule:
+    - cron: "0 17 * * 0"   # 매주 월요일 02:00 KST
 
 jobs:
   build:
@@ -15,60 +24,79 @@ jobs:
     container:
       image: onesai1/nest-compiler-sdk:1.0.0
 
+    env:
+      SRC: ${{ github.workspace }}/upstream
+      BUILD: ${{ github.workspace }}/upstream/build_ci
+
     steps:
-      - name: Disk before
+      - name: 디스크 (전)
         run: df -h /
 
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 1
-
-      - name: Configure
+      - name: 상류 클론
         run: |
           set -eux
-          mkdir -p build_ci && cd build_ci
-          export TVM_HOME=$GITHUB_WORKSPACE/tvm
-          export DMLC_CORE=$GITHUB_WORKSPACE/tvm/3rdparty/dmlc-core
-          export TVM_BUILD_PATH=$GITHUB_WORKSPACE/build_ci/tvm
-          export TVM_LIBRARY_PATH=$GITHUB_WORKSPACE/build_ci/tvm
+          git clone --depth 1 --branch "${{ inputs.upstream_ref || 'main' }}" \
+            https://gitlab.com/ones-ai/nest-compiler.git "$SRC"
+          cd "$SRC"
+          git submodule update --init --recursive --depth 1
+          git log --oneline -1
+
+      # 상류 vtalib 의 transpose() 가 미구현 스텁이다.
+      # 컴파일러 빌드에는 영향이 없지만, 이 트리에서 번들을 만들어
+      # 보드로 보낼 수도 있으므로 여기서도 적용해 둔다. 멱등하다.
+      - name: transpose 패치
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/patch_transpose.py \
+            https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/ci/patch_transpose.py
+          python3 /tmp/patch_transpose.py \
+            "$SRC/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp"
+
+      - name: 설정
+        run: |
+          set -eux
+          mkdir -p "$BUILD" && cd "$BUILD"
+          export TVM_HOME=$SRC/tvm
+          export DMLC_CORE=$SRC/tvm/3rdparty/dmlc-core
+          export TVM_BUILD_PATH=$BUILD/tvm
+          export TVM_LIBRARY_PATH=$BUILD/tvm
           # set -u 때문에 미정의 변수 참조가 즉시 중단을 일으킨다.
           # 컨테이너에 PYTHONPATH 가 없으므로 기본값을 준다.
           export PYTHONPATH=$TVM_HOME/python:${PYTHONPATH:-}
           # 이 이미지(1.0.0)에는 llvm-config 가 PATH 에 없고
           # /usr/lib/llvm-8 디렉터리만 있다. cmake 가 자동으로 찾지 못할 수
           # 있으므로 보드 빌드와 같은 방식으로 경로를 명시한다.
-          cmake -G Ninja .. \
+          cmake -G Ninja "$SRC" \
             -DCMAKE_BUILD_TYPE=Release \
             -DLLVM_DIR=/usr/lib/llvm-8/lib/cmake/llvm \
             -DNESTC_WITH_EVTA=ON \
-            -DNESTC_EVTA_BUNDLE_TEST=ON \
-            -DGLOW_WITH_BUNDLES=ON
+            -DNESTC_EVTA_BUNDLE_TEST=OFF \
+            -DGLOW_WITH_BUNDLES=OFF
 
-      # GitHub 호스티드 러너는 4코어 / 디스크 14GB 라서
-      # ninja check_nestc 전체는 자원이 모자랄 수 있다.
-      # 우선 컴파일러 도구 두 개만 만든다.
-      - name: Build compiler tools
+      # 호스티드 러너는 4코어 / 디스크 14GB 다.
+      # 전체 빌드는 자원이 모자라므로 컴파일러 도구 두 개만 만든다.
+      # 번들 테스트와 번들 생성은 꺼 두었다(위 OFF 두 개).
+      - name: 컴파일러 빌드
         run: |
           set -eux
-          cd build_ci
+          cd "$BUILD"
           ninja model-compiler image-classifier
 
-      - name: Versions
+      - name: 확인
         run: |
-          ./build_ci/glow/bin/model-compiler --version
-          ./build_ci/glow/bin/image-classifier --version || true
+          "$BUILD/glow/bin/model-compiler" --version
+          "$BUILD/glow/bin/image-classifier" --version || true
 
-      - name: Disk after
+      - name: 디스크 (후)
         if: always()
         run: df -h /
 
-      - name: Upload compiler tools
+      - name: 컴파일러 업로드
         uses: actions/upload-artifact@v4
         with:
           name: nestc-tools
           path: |
-            build_ci/glow/bin/model-compiler
-            build_ci/glow/bin/image-classifier
-          retention-days: 14
+            upstream/build_ci/glow/bin/model-compiler
+            upstream/build_ci/glow/bin/image-classifier
+          retention-days: 30
           if-no-files-found: error
