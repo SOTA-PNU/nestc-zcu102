@@ -1,6 +1,10 @@
-# ZCU102 + NEST-C ResNet-18 실행 매뉴얼
+# ZCU102 + NEST-C 빠른 시작 — 상류 빌드 없이
 
 작성 2026-10-08 · donghun (PNU-SOTA) · 대상 ZCU102 + PYNQ(Ubuntu 18.04) + ETRI NEST-C
+
+이 문서는 `08-resnet18-manual.md` 에서 상류 소스 빌드(경로 B)를 덜어낸 것이다.
+보드와 PC 환경이 이미 세팅되어 있고, 모델을 올려 돌리는 것만 하려는 사람을 위한 판이다.
+환경을 처음부터 세우거나 상류 변경을 반영해야 한다면 08번 문서의 경로 B를 본다.
 
 ---
 
@@ -165,150 +169,15 @@ cat CTestTestfile.cmake
 
 **VTA 프로그램 실행 중 Ctrl+C 금지.** FPGA와 커널 메모리 할당기(xlnk)가 정리되지 않아 재부팅 전까지 보드를 쓸 수 없다. 추론은 길어야 2초이므로 기다린다. 컴파일 중단은 안전하다.
 
----
-
-## 4. 경로 B — 상류 소스에서 빌드
-
-환경을 새로 세우거나 상류 변경을 반영할 때의 절차다. 보드에서 한 시간 가까이 걸린다.
-
-### 4.1 aws shim 설치
-
-ETRI가 데이터 배포에 쓰던 S3 버킷 `nestc-data-pub` 이 삭제되어 `NoSuchBucket` 을 반환한다. 빌드 중 CMakeLists가 `aws s3 cp` 로 번들 소스와 Input/Golden 데이터를 받으려 하므로 그대로 두면 실패한다.
-
-같은 내용 198개 파일이 GitLab `yongin.kwon/nestc-data` 에 남아 있고 경로가 1:1로 대응한다. `aws` 명령을 흉내 내는 shim을 두어 CMakeLists를 수정하지 않고 통과시킨다.
-
-```sh
-mkdir -p ~/bin
-cat > ~/bin/aws <<'EOF'
-#!/bin/sh
-BASE=https://gitlab.com/yongin.kwon/nestc-data/-/raw/master
-if [ "$1" = "s3" ] && [ "$2" = "cp" ]; then
-  SRC=$3; DST=$4
-  case "$SRC" in
-    s3://nestc-data-pub/*) P=${SRC#s3://nestc-data-pub/} ;;
-    s3://nestc-pub/*)      P=${SRC#s3://nestc-pub/} ;;
-    *) echo "aws-shim: 지원하지 않는 경로 $SRC" >&2; exit 1 ;;
-  esac
-  mkdir -p "$(dirname "$DST")" 2>/dev/null
-  curl -fL "$BASE/$P" -o "$DST" || { echo "aws-shim: 실패 $P" >&2; exit 1; }
-  exit 0
-fi
-exit 0
-EOF
-chmod +x ~/bin/aws
-echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc
-export PATH=$HOME/bin:$PATH
-```
-
-`PATH` 설정은 빌드하는 모든 셸에서 필요하다. `~/.bashrc` 에 넣어두면 잊지 않는다.
-
-### 4.2 상류 클론
-
-```sh
-git clone --recursive https://gitlab.com/ones-ai/nest-compiler.git ~/nest-compiler-2024
-```
-
-1.1GB 정도이며 시간이 걸린다. `--recursive` 를 빼면 `vta_lib` 서브모듈이 없어 빌드가 되지 않는다.
-
-### 4.3 transpose 패치 적용
-
-상류 `vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp` 의 `transpose()` 는 `//TODO re-implement` 주석과 함께 `-1` 만 반환하는 미구현 스텁이다. 출력 버퍼에 아무것도 쓰지 않으므로 초기화되지 않은 메모리가 후속 연산으로 흘러간다.
-
-ResNet-18은 VTA 타일 레이아웃 전용 변환만 쓰므로 **영향을 받지 않는다.** 하지만 ResNet-50은 avgpool과 FC 사이에서 이 함수를 호출하기 때문에, aarch64 경로로 돌리면 입력 영상과 무관하게 항상 같은 클래스를 낸다. 지금 적용해 두는 편이 낫다.
-
-저장소의 `ci/patch_transpose.py` 를 보드로 복사해 실행한다. 멱등하므로 여러 번 돌려도 안전하다.
-
-```sh
-python3 patch_transpose.py ~/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
-grep -c at8dim_nestc_patch ~/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
-```
-
-마지막 줄이 `3` 이면 적용된 것이다(함수 정의 1 + 호출 2).
-
-### 4.4 설정과 빌드
-
-```sh
-cat > ~/run-build.sh <<'EOF'
-set -e
-export PATH=$HOME/bin:$PATH
-cd ~/nest-compiler-2024
-mkdir -p build_board && cd build_board
-cmake .. \
-  -DNESTC_WITH_EVTA=ON \
-  -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DNESTC_USE_VTASIM=OFF \
-  -DVTA_RESNET18_WITH_SKIPQUANT0=ON \
-  -DNESTC_EVTA_RUN_ON_ZCU102=ON \
-  -DNESTC_USE_PRECOMPILED_BUNDLE=ON \
-  -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON
-make -j1 zcu102 || true
-echo DONE
-EOF
-chmod +x ~/run-build.sh
-tmux new -d -s bld '~/run-build.sh > ~/bld.log 2>&1'
-```
-
-이 플래그 조합은 상류의 `nestc_tests/vta_bundle_test.sh` 와 동일하다. 각각의 의미는 `03-build-notes.md` 에 있다.
-
-진행 확인은 별도 창에서 한다.
-
-```sh
-tail -3 ~/bld.log
-grep -cE 'error:' ~/bld.log      # 실제 컴파일 에러 수
-grep -c 'aws-shim' ~/bld.log     # shim 호출 수 (15 내외)
-```
-
-`DONE` 이 보이고 `error:` 가 0이면 성공이다.
-
-### 4.5 테스트 실행
-
-```sh
-tmux new -s chk
-cd ~/nest-compiler-2024/build_board
-sudo -E env PATH=$HOME/bin:$PATH ctest -L ZCU102 --output-on-failure 2>&1 | tee ~/check.log
-```
-
-기대 결과는 다음과 같다.
-
-```
-100% tests passed, 0 tests failed out of 51
-Total Test time (real) =  12.40 sec
-```
-
-ResNet-18만 돌리려면 이렇게 한다.
-
-```sh
-sudo -E env PATH=$HOME/bin:$PATH ctest -L ZCU102 -R vtaMxnetResnet18Bundle --output-on-failure
-```
-
-### 4.6 빌드에서 흔히 빠지는 함정
-
-**`make` 를 인자 없이 돌리지 않는다.** 아무것도 지정하지 않으면 TVM 전체와 Glow 컴파일러 본체를 만들기 시작한다. 보드는 `NESTC_USE_PRECOMPILED_BUNDLE=ON` 이라 `model-compiler` 가 필요 없고, 필요한 것은 번들 실행 파일뿐이다. 전체 빌드는 수 시간을 쓰고 LLVM 8.0의 RTTI 불일치에 부딪혀 실패한다. 반드시 `make zcu102` 로 타깃을 지정한다.
-
-**`zcu102` 는 빌드 타깃이 아니라 실행 타깃이다.** 빌드가 끝나면 이어서 ctest를 실행한다. 비root로 돌면 전부 실패하고 make는 `Error 8`(ctest의 종료 코드)로 끝난다. 이것을 빌드 실패로 오인하기 쉽다. **make의 `Error N` 은 자식 프로세스의 종료 코드일 뿐 컴파일 에러가 아니다.** 실제 컴파일 에러는 `grep -cE 'error:'` 로만 판단한다. 위 스크립트에 `|| true` 를 넣은 이유가 이것이다.
-
-**`| tail -N` 으로 빌드를 지켜보지 않는다.** 파이프 버퍼링 때문에 출력이 멈춘 것처럼 보여 멀쩡한 빌드를 중단하게 된다. `tee` 로 파일에 남기고 별도 창에서 `tail` 한다.
-
-**동시에 두 개의 `make` 를 돌리지 않는다.** 가용 메모리 1.5GB에서 `cc1plus` 두 개가 뜨면 바로 한계에 닿는다. 중단했던 빌드의 유령 프로세스가 남아 있을 수 있으므로 `pgrep -a cc1plus` 로 확인하는 습관을 들인다.
-
-**`NESTC_USE_PRECOMPILED_EVTA_LIBRARY=ON` 을 쓰지 않는다.** 공식 install.md에 있으나 S3가 죽어 404로 실패한다. 기본값 OFF면 서브모듈 소스에서 빌드하여 정상 동작한다. 공식 문서의 다른 부분도 같은 이유로 신뢰할 수 없으니 이 매뉴얼을 우선한다.
-
-**`/home/xilinx/nest-compiler/exec1` 에서 빌드하지 않는다.** cmake 캐시에 `-fno-rtti` 가 오염되어 있다.
-
-**병렬 빌드를 시도하지 않는다.** `-j2` 이상은 메모리 부족으로 떨어진다. `-j1` 이 유일한 선택지다.
-
----
-
-## 5. 경로 C — ONNX에서 번들 직접 생성
+## 4. 경로 C — ONNX에서 번들 직접 생성
 
 새 모델을 올릴 때의 본래 경로다. 컴파일은 PC에서, 실행은 보드에서 한다.
 
-### 5.1 왜 PC에서 하는가
+### 4.1 왜 PC에서 하는가
 
 보드는 DDR 4GB 중 대부분을 VTA용 연속 메모리(CMA)로 예약하여 리눅스 가용 메모리가 1.5GB뿐이다. 컴파일러 전체 빌드는 4시간이 걸리고 그마저 실패했다. 반면 `NESTC_USE_PRECOMPILED_BUNDLE=ON` 이 말해 주듯 **보드가 실제로 필요로 하는 것은 컴파일러가 아니라 런타임뿐이다.** PC에서 컴파일하면 5분이면 끝난다.
 
-### 5.2 PC 환경
+### 4.2 PC 환경
 
 **도커 이미지는 빌드 환경만 제공한다. 컴파일러는 그 안에 들어 있지 않다.** 어느 이미지에도 `model-compiler` 와 `image-classifier` 가 없으며, 상류 소스를 직접 빌드해야 한다. 이 점을 오해하면 "이미지를 받았는데 명령이 없다"에서 막힌다.
 
@@ -354,7 +223,7 @@ docker run -dit --name nestc -v ~/nestc-upstream:/root/nestc leejaymin/nestc-ssh
 
 번들 생성에는 검증된 `leejaymin/nestc-ssh:latest` 를 쓴다. 공식 SDK로 통일하려면 5.6절의 기준값과 먼저 대조해야 한다.
 
-### 5.3 1단계 — 보정 프로파일 생성
+### 4.3 1단계 — 보정 프로파일 생성
 
 **보정 프로파일은 어디서 받는 것이 아니라 직접 만드는 것이다.** 이 사실을 몰라 이틀을 소모했으므로 특히 강조해 둔다.
 
@@ -376,7 +245,7 @@ image-classifier <이미지들> \
 
 `symmetric_with_power2_scale` 은 영점(zero point)이 0이고 스케일이 2의 거듭제곱인 스키마다. VTA에 부동소수점 곱셈기가 없고 시프트만 있어서 강제되는 제약이다.
 
-### 5.4 2단계 — 번들 생성
+### 4.4 2단계 — 번들 생성
 
 ```sh
 model-compiler -g \
@@ -395,13 +264,13 @@ model-compiler -g \
 
 양자화 스케일은 이 시점에 코드에 박힌다. 실행 시점에 바꿀 수 없으므로, 양자화를 바꾸려면 번들을 다시 만들어야 한다.
 
-### 5.5 3단계 — 보드에서 컴파일
+### 4.5 3단계 — 보드에서 컴파일
 
 번들을 보드로 전송하고 상류 VTA 런타임과 링크한다. CMake를 거치지 않고 기존 빌드의 컴파일 인자를 추출해 직접 컴파일하는 방식을 쓴다. 기존 작업 트리를 건드리지 않기 위함이다. 구체적인 링크 명령은 `03-build-notes.md` 에 있다.
 
 **주의 — 상류 번들은 상류 런타임을 요구한다.** 2024년 번들이 호출하는 `VTAUopBufferReset()` 이 보드에 설치된 2021년 런타임에는 없다. 상류 `vta_lib` 을 보드에서 별도로 빌드해야 하고, 링크할 때 **상류 헤더 경로를 기존 트리보다 앞에 두어야** 한다. 이걸 놓치면 `VTAUopBufferReset was not declared` 가 난다. 라이브러리 경로만 고쳐서는 해결되지 않는다.
 
-### 5.6 검증
+### 4.6 검증
 
 자체 생성한 ResNet-18 번들이 ETRI 배포 번들과 동일한 결과를 내는지 확인했다.
 
@@ -415,7 +284,7 @@ model-compiler -g \
 
 ---
 
-### 5.7 실전 예시 — 내 PC의 ONNX를 푸시해서 원격으로 추론하기
+### 4.7 실전 예시 — 내 PC의 ONNX를 푸시해서 원격으로 추론하기
 
 여기까지가 원리라면, 이 절은 실제 순서다. 새 모델 파일이 로컬 PC에 있고
 그것을 보드에서 돌려 보려는 상황을 가정한다. 모델 이름을 `mymodel` 이라 하고,
@@ -558,12 +427,12 @@ https://github.com/SOTA-PNU/nestc-zcu102/actions 에서 방금 실행을 연다.
 
 ---
 
-## 6. 경로 D — GitHub 푸시로 추론하기
+## 5. 경로 D — GitHub 푸시로 추론하기
 
 경로 C를 자동화한 것이다. 모델 기술서 하나를 저장소에 푸시하면 CI가 번들을
 만들어 보드로 보내고, 추론을 돌려 기대값과 대조한다. 사람이 손댈 일이 없다.
 
-### 6.1 구성
+### 5.1 구성
 
 ```
   GitHub (SOTA-PNU/nestc-zcu102)
@@ -586,7 +455,7 @@ GitHub Actions의 자바스크립트 액션이 돌지 않고, 가용 메모리�
 띄워 그 안에서 스크립트를 돌린다. 이때 상류 트리를 `/src` 에 마운트한다.
 `/root` 아래에 마운트하면 `--user` 로 권한을 낮춘 컨테이너가 접근하지 못한다.
 
-### 6.2 새 모델 올리기
+### 5.2 새 모델 올리기
 
 `models/<이름>.conf` 를 만들어 푸시하는 것이 전부다. `models/resnet18.conf` 를
 복사해 값을 바꾸면 된다.
@@ -621,7 +490,7 @@ NHWC로 다루므로 채널이 마지막에 온다.
 또는 VTAInterpreter로 PC에서 돌린 결과를 골든으로 삼는다. 이것이 없으면 CI가
 무엇을 가지고 통과를 판단할지 알 수 없다.
 
-### 6.3 기대값은 "정답"이 아니라 "어제와 같은 값"이다
+### 5.3 기대값은 "정답"이 아니라 "어제와 같은 값"이다
 
 `cat_285.png` 의 기대값이 285가 아니라 281인 것이 좋은 예다. 285는 Egyptian
 cat, 281은 tabby cat이므로 모델은 틀렸다. 확신도도 0.53으로 낮아 모델이
@@ -636,7 +505,7 @@ cat, 281은 tabby cat이므로 모델은 틀렸다. 확신도도 0.53으로 낮�
 모델이 실제로 얼마나 맞히는지는 별개의 작업이다. ImageNet 검증셋 수백 장으로
 top-1 정확도를 재야 하며, 양자화 품질을 논할 때 하면 된다.
 
-### 6.4 보드가 한 대뿐이라는 제약
+### 5.4 보드가 한 대뿐이라는 제약
 
 워크플로에 `concurrency: zcu102-board` 를 걸어 두 실행이 겹치지 않게 했다.
 앞선 실행을 취소하지 않고 **기다리게** 한다. VTA 프로그램 실행 중 취소는
@@ -646,7 +515,7 @@ FPGA와 xlnk를 정리하지 못한 채 끝나므로, 재부팅 전까지 보드
 단위라 서로를 막아 주지 못한다. 개인 저장소 `udonghun/nestc` 는 미러로 두고
 Actions를 꺼 두는 편이 안전하다.
 
-### 6.5 사전 준비
+### 5.5 사전 준비
 
 러너가 있는 PC에서 한 번만 해 두면 된다.
 
@@ -672,7 +541,7 @@ echo 'xilinx ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/xilinx-ci
 sudo chmod 440 /etc/sudoers.d/xilinx-ci
 ```
 
-### 6.6 현재 검증된 범위와 남은 일
+### 5.6 현재 검증된 범위와 남은 일
 
 ResNet-18로 전 구간이 통과했다. 푸시 한 번으로 번들 생성, 전송, 보드 빌드,
 추론, 판정까지 자동으로 이루어지며 세 장 모두 기대값과 일치했다.
@@ -695,7 +564,7 @@ generic과 aarch64 CPU 폴백의 차이와 일치한다(10.2절). 보드 빌드 
 
 ---
 
-## 7. 문제 해결
+## 6. 문제 해결
 
 | 증상 | 원인과 조치 |
 |---|---|
@@ -712,7 +581,7 @@ generic과 aarch64 CPU 폴백의 차이와 일치한다(10.2절). 보드 빌드 
 
 ---
 
-## 8. 용어
+## 7. 용어
 
 **번들(bundle)** — AOT 컴파일 산출물. 생성된 C++ 소스, 헤더, int8 가중치 바이너리의 묶음. 보드에서 컴파일해 단일 실행 파일로 만든다.
 
@@ -728,6 +597,6 @@ generic과 aarch64 CPU 폴백의 차이와 일치한다(10.2절). 보드 빌드 
 
 ---
 
-## 9. 관련 문서
+## 8. 관련 문서
 
 부팅과 콘솔 설정은 `01-boot-setup.md`, 실행 세부와 번들 구성은 `02-run-resnet18.md`, 빌드 옵션과 LLVM 제약은 `03-build-notes.md`, SD 카드 백업은 `04-backup.md`, ResNet-50 디버깅 전 과정은 `05-model-debugging.md`, NEST-C 구조 학습은 `06-nestc-study-guide.md`, 전체 경과와 로드맵은 `07-progress-report.md` 를 참조한다.
