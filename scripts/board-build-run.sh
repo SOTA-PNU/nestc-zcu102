@@ -102,10 +102,18 @@ for pair in ${EXPECT:-}; do
   path="$IMGDIR/$img.png"
   [ -f "$path" ] || { echo "   이미지 없음 $path"; FAIL=1; continue; }
 
-  out=$(sudo -E env PATH="$PATH" "./$MODEL_NAME" "$path" 2>&1) || {
-    echo "   $img 실행 실패"; echo "$out" | tail -5; FAIL=1; continue; }
+  # 종료 코드로 판정하지 않는다. 번들은 추론에 성공하고도 0 이 아닌 값을
+  # 반환하는 경우가 있다(두 번째 실행부터 VTA 정리 단계에서 그런다).
+  # 판정은 출력의 Result 줄로만 한다.
+  out=$(sudo -E env PATH="$PATH" "./$MODEL_NAME" "$path" 2>&1 || true)
 
   got=$(echo "$out"  | sed -n 's/^Result: *//p'     | head -1)
+  if [ -z "$got" ]; then
+    echo "   FAIL $img  Result 줄이 없다"
+    echo "$out" | tail -5
+    FAIL=1
+    continue
+  fi
   conf=$(echo "$out" | sed -n 's/^Confidence: *//p' | head -1)
   ms=$(echo "$out"   | sed -n 's/^Inference time: *//p' | head -1)
 

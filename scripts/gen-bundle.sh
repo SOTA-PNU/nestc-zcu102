@@ -119,7 +119,7 @@ cp "$MAIN" "$OUT/Main.cpp"
 # 보드 쪽 스크립트가 읽을 요약본. conf 전체를 넘기지 않기 위함이다.
 cat > "$OUT/bundle.conf" <<EOF
 MODEL_NAME=$MODEL_NAME
-EXPECT=${EXPECT:-}
+EXPECT="${EXPECT:-}"
 EOF
 
 echo "== 완료"
