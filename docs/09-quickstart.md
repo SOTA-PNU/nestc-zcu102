@@ -18,7 +18,7 @@
 
 **경로 C — ONNX 모델에서 번들을 직접 생성한다.** PC에서 양자화 보정과 컴파일을 수행해 번들을 만들고 보드로 보낸다. 새 모델을 올릴 때의 본래 경로다. 4장.
 
-**경로 D — GitHub 푸시로 자동 추론.** 경로 C를 CI로 자동화한 것이다. 모델 기술서를 푸시하면 번들 생성부터 보드 추론, 판정까지 사람 손 없이 이루어진다. 5장.
+**경로 D — GitHub 푸시로 자동 추론.** 경로 C를 CI로 자동화한 것이다. 모델 기술서를 푸시하고 Actions에서 그 모델을 지정해 실행하면 번들 생성부터 보드 추론, 판정까지 사람 손 없이 이루어진다. 5장.
 
 A로 보드가 살아 있는지 확인하고, C로 원리를 익힌 뒤, D로 자동화에 올리는 순서를 권한다.
 
@@ -287,12 +287,31 @@ model-compiler -g \
 여기까지가 원리라면, 이 절은 실제 순서다. 새 모델 파일이 로컬 PC에 있고
 그것을 보드에서 돌려 보려는 상황을 가정한다. 모델 이름을 `mymodel` 이라 하고,
 파일은 윈도우의 `C:\Users\ehdgn\Downloads\mymodel.onnx` 에 있다고 하자.
+각 단계의 실제 출력 예시는 SqueezeNet 1.1(`models/squeezenet.conf`)을 올리며
+겪은 것을 그대로 옮겼다.
+
+#### 한눈에 보기
+
+| 단계 | 어디서 | 하는 일 | 끝났다는 증거 |
+|---|---|---|---|
+| 1 | PC 컨테이너 | 모델에서 입력·출력·연산자·전처리를 읽는다 | 설정에 적을 값 네 가지 |
+| 2 | PC 컨테이너 | float → int8 → VTA 흉내 순으로 세 번 돌려 기준값 사다리를 만든다 | 비교표 한 장 |
+| 3 | 윈도우 | ONNX를 저장소에 넣는다 | `models/onnx/mymodel.onnx` |
+| 4 | 윈도우 | 설정 파일을 쓴다 | `models/mymodel.conf` |
+| 5 | PC 컨테이너 | CI와 똑같이 번들을 미리 만들어 본다 | `weights.bin` 과 `OUTPUT_NAME` |
+| 6 | 윈도우 | 푸시하고 실행시킨다 | Actions에 새 실행 |
+| 7 | GitHub | 푸시 뒤에 일어나는 일을 단계별로 따라간다 | 단계별 초록불 |
+| 8 | GitHub | 결과를 사다리와 대조해 읽는다 | 통과, 또는 막힌 칸 |
+
+1·2·5단계가 PC에서 하는 확인이다. **보드까지 가기 전에 PC에서 걸러낼 수 있는
+것은 전부 PC에서 걸러낸다.** 보드는 한 대뿐이고, 실행 중에 취소하면 재부팅해야
+한다(5.5절).
 
 #### 1단계 — 모델을 들여다본다
 
-설정 파일에 적을 입력 이름과 형상을 **추측하지 않고 모델에서 읽는다.** 여기서
-틀리면 보정 단계에서 `Mismatch between input image and ONNX input shape` 로
-멈춘다.
+설정 파일에 적을 값을 **추측하지 않고 모델에서 읽는다.** 여기서 틀리면 보정
+단계에서 `Mismatch between input image and ONNX input shape` 나
+`No node under name ...` 로 멈춘다.
 
 ```sh
 cp /mnt/c/Users/ehdgn/Downloads/mymodel.onnx ~/nestc-upstream/
@@ -304,7 +323,7 @@ docker exec -it nestc bash
 
 ```sh
 cd /root/nestc
-python3 - <<'EOF'
+python3 - <<'PY'
 import onnx
 m = onnx.load('mymodel.onnx')
 for i in m.graph.input:
@@ -312,34 +331,100 @@ for i in m.graph.input:
     print('입력', i.name, d)
 for o in m.graph.output:
     print('출력', o.name)
+print('첫 노드', [n.op_type for n in m.graph.node[:3]])
 print('연산자', sorted({n.op_type for n in m.graph.node}))
-EOF
+PY
 ```
 
-세 줄을 본다. 입력 이름은 `INPUT_NAME` 에, 형상은 `INPUT_SHAPE` 에 들어간다.
-형상이 `[1,3,224,224]` 처럼 채널이 앞에 있어도 Glow에는 NHWC로 적는다
-(`[1,224,224,3]`). 연산자 목록에 `Concat` 이 있으면 **지금은 올릴 수 없다.**
-VTA 백엔드가 처리하지 못한다(07번 보고서 5.3절).
+SqueezeNet에서 나온 값:
 
-#### 2단계 — PC에서 먼저 돌려 기준값을 만든다
+```
+입력 data [1, 3, 224, 224]
+출력 squeezenet0_flatten0_reshape0
+첫 노드 ['Conv', 'Relu', 'MaxPool']
+연산자 ['AveragePool', 'Concat', 'Conv', 'Dropout', 'MaxPool', 'Relu', 'Reshape']
+```
 
-새 모델은 정답을 모르므로 판정 기준이 없다. 보드에 올리기 전에 PC에서
-VTAInterpreter로 돌려 그 결과를 골든으로 삼는다. 하드웨어 없이 도는 백엔드다.
+네 가지를 읽는다.
+
+1. **입력 이름** → `INPUT_NAME`. 다른 곳의 예제 이름(`data_0` 등)을 베끼지 않는다.
+2. **입력 형상과 레이아웃** → `INPUT_SHAPE`, `IMAGE_LAYOUT`. **ONNX가 선언한
+   그대로 적는다.** `[1,3,224,224]` 면 NCHW, `[1,224,224,3]` 이면 NHWC다.
+   ResNet-18이 NHWC인 것은 그 ONNX가 NHWC로 선언되어 있기 때문이고,
+   SqueezeNet은 NCHW다. 모델마다 다르다.
+3. **전처리를 모델이 품고 있는가** → `IMAGE_MODE`, `USE_IMAGENET_NORMALIZATION`.
+   첫 노드가 `Sub`/`Div` 면 정규화가 그래프 안에 있으므로 `0to255`, 정규화 0
+   (ResNet-18). 첫 노드가 바로 `Conv` 면 밖에서 해 줘야 하므로 `0to1`,
+   정규화 1(SqueezeNet). 틀리면 활성값이 폭주해 softmax가 NaN이 된다.
+4. **연산자 목록.** `Concat` 이 있으면 Concat 지원 패치가 PC 컨테이너와 보드
+   양쪽에 적용되어 있어야 한다(`patches/vta-concat-support.md`). 패치가 있어도
+   SqueezeNet은 아직 보드에서 틀린 답을 낸다(8단계 예시).
+
+출력 이름은 5단계에서 쓴다.
+
+#### 2단계 — PC에서 세 번 돌려 기준값 사다리를 만든다
+
+새 모델은 정답을 모르므로 판정 기준이 없다. 그런데 기준이 하나뿐이면 보드
+결과가 어긋났을 때 **어디서 어긋났는지** 알 수 없다. 그래서 조건을 하나씩만
+바꿔 가며 세 번 돌린다. 이것을 기준값 사다리라 부른다.
+
+| 칸 | 백엔드 | 양자화 | 이 칸과 바로 위 칸이 다르면 |
+|---|---|---|---|
+| ① float | Interpreter | 없음 | — (모델 자체의 답) |
+| ② int8 | Interpreter | 있음 | 양자화 손실 |
+| ③ VTA 흉내 | VTAInterpreter | 있음 | VTA 연산 정의 문제 |
+| ④ 보드 | ZCU102 | 있음 | 하드웨어 경로·타일링·런타임 문제 |
+
+④는 8단계에서 채운다. 아래 명령의 전처리 세 옵션(`-image-layout`,
+`-image-mode`, `-use-imagenet-normalization`)은 1단계에서 정한 값을 쓰고,
+세 번 모두 같아야 한다. 예시는 SqueezeNet 값이다.
 
 ```sh
-/root/nestc/build/glow/bin/image-classifier \
-  /root/nestc/glow/tests/images/imagenet/cat_285.png \
-  /root/nestc/glow/tests/images/imagenet/dog_207.png \
-  /root/nestc/glow/tests/images/imagenet/zebra_340.png \
-  -m=mymodel.onnx -model-input-name=<1단계의 입력 이름> \
-  -backend=VTAInterpreter \
-  -image-layout=NHWC -image-mode=0to255 \
-  -compute-softmax -topk=1
+cd /root/nestc
+IMG=/root/nestc/glow/tests/images/imagenet
+IC=/root/nestc/build/glow/bin/image-classifier
+PRE="-model-input-name=data -image-layout=NCHW -image-mode=0to1 -use-imagenet-normalization"
+Q=symmetric_with_power2_scale
+
+# ① float
+$IC $IMG/cat_285.png $IMG/dog_207.png $IMG/zebra_340.png -m=mymodel.onnx $PRE \
+    -backend=Interpreter -compute-softmax -topk=1
+
+# 보정 프로파일 (CI와 똑같이 cat_285 한 장으로)
+$IC $IMG/cat_285.png -m=mymodel.onnx $PRE \
+    -backend=VTAInterpreter -compute-softmax -topk=5 \
+    -dump-profile=/root/nestc/mymodel_calib.yaml -quantization-schema=$Q
+
+# ② int8
+$IC $IMG/cat_285.png $IMG/dog_207.png $IMG/zebra_340.png -m=mymodel.onnx $PRE \
+    -backend=Interpreter -compute-softmax -topk=1 \
+    -load-profile=/root/nestc/mymodel_calib.yaml -quantization-schema=$Q
+
+# ③ VTA 흉내
+$IC $IMG/cat_285.png $IMG/dog_207.png $IMG/zebra_340.png -m=mymodel.onnx $PRE \
+    -backend=VTAInterpreter -compute-softmax -topk=1 \
+    -load-profile=/root/nestc/mymodel_calib.yaml -quantization-schema=$Q
 ```
 
-여기서 나오는 클래스 번호가 `EXPECT` 에 들어갈 값이다. **보드에서 나오기를
-바라는 값이 아니라, 실제로 나온 값을 적는다.** 모델이 틀려도 그대로 적는다
-(5.3절). 이 단계를 건너뛰면 CI가 무엇을 기준으로 통과를 판단할지 알 수 없다.
+보정 이미지를 CI와 다르게 쓰면 양자화 스케일이 달라져 ②③이 보드와 비교되지
+않는다. CI는 `CALIB_IMAGES` 에 적힌 한 장으로 보정한다.
+
+결과를 표 한 장으로 남긴다. SqueezeNet의 표:
+
+| 입력 | ① float | ② int8 | ③ VTA 흉내 |
+|---|---|---|---|
+| cat_285 | 281 (0.4366) | 281 | 검증 중 |
+| dog_207 | 205 (0.3526) | 205 | 검증 중 |
+| zebra_340 | 340 (0.9996) | 340 | 검증 중 |
+
+①과 ②가 같으므로 이 모델은 양자화로 답이 바뀌지 않는다. 개가 205
+(flat-coated retriever)인 것은 모델이 207(golden retriever)과 헷갈린 것이다.
+모델의 답이므로 그대로 둔다.
+
+`EXPECT` 에는 **보드에 가장 가까운 칸**의 값을 적는다. ③이 있으면 ③, 없으면
+②다. 보드에서 나오기를 바라는 값이 아니라 실제로 나온 값을 적고, 모델이
+틀려도 그대로 적는다(5.3절). 확신도는 판정에 쓰지 않지만 표에는 남긴다.
+8단계에서 보드 값과 나란히 놓고 볼 것이기 때문이다.
 
 #### 3단계 — 저장소에 파일을 넣는다
 
@@ -352,7 +437,8 @@ copy C:\Users\ehdgn\Downloads\mymodel.onnx models\onnx\
 ```
 
 **Main.cpp는 만들지 않아도 된다.** `gen-bundle.sh` 가 ResNet-18의 main을 틀로
-삼아 자동 생성한다. 분류 모델이 아니거나 출력 해석이 다르면 그때만 전용 main을
+삼아 자동 생성하고, 전처리 세 가지(범위, 채널 순서, 정규화)도 설정에 맞춰
+고쳐 넣는다. 분류 모델이 아니거나 출력 해석이 다르면 그때만 전용 main을
 `MAIN_CPP` 로 지정한다.
 
 ONNX가 100MB를 넘으면 GitHub가 푸시를 거부한다. 그때는 저장소에 넣지 말고
@@ -361,34 +447,69 @@ ONNX가 100MB를 넘으면 GitHub가 푸시를 거부한다. 그때는 저장소
 
 #### 4단계 — 설정 파일을 쓴다
 
-`models/mymodel.conf` 를 만든다. `models/resnet18.conf` 를 복사해 고치는 편이
-빠르다.
+`models/mymodel.conf` 를 만든다. 레이아웃이 같은 모델의 설정을 복사해
+고치는 편이 빠르다. NCHW 모델이면 `models/squeezenet.conf`, NHWC 모델이면
+`models/resnet18.conf` 를 복사한다. 아래는 SqueezeNet과 같은 꼴의 모델이다.
 
 ```sh
 MODEL_NAME=mymodel
 MODEL_ONNX=repo:models/onnx/mymodel.onnx
-INPUT_NAME=data                      # 1단계에서 읽은 값
-INPUT_SHAPE="[1,224,224,3]"          # 1단계에서 읽은 값, NHWC로
-IMAGE_LAYOUT=NHWC
-IMAGE_MODE=0to255
-USE_IMAGENET_NORMALIZATION=0
+INPUT_NAME=data                      # 1단계 ①
+INPUT_SHAPE="[1,3,224,224]"          # 1단계 ②, ONNX 선언 그대로
+IMAGE_LAYOUT=NCHW                    # 1단계 ②
+IMAGE_MODE=0to1                      # 1단계 ③
+USE_IMAGENET_NORMALIZATION=1         # 1단계 ③
+CHANNEL_ORDER=RGB                    # 보드 main의 채널 순서. ResNet-18 틀은 BGR
 CALIB_EXTRA="-compute-softmax -topk=5"
 CALIB_IMAGES=upstream:glow/tests/images/imagenet/cat_285.png
-OUTPUT_NAME=<번들 생성 로그가 알려 준다, 아래 참고>
-EXPECT="cat_285:281 dog_207:207 zebra_340:340"   # 2단계의 실제 출력
+OUTPUT_NAME=TBD                      # 5단계에서 채운다
+EXPECT="cat_285:281 dog_207:205 zebra_340:340"   # 2단계 표의 ③(없으면 ②)
 ```
 
-전처리 세 줄(`IMAGE_LAYOUT`, `IMAGE_MODE`, `USE_IMAGENET_NORMALIZATION`)은
-2단계에서 쓴 것과 **반드시 같아야 한다.** 보정과 실행의 전처리가 다르면
-양자화 스케일이 어긋나 엉뚱한 결과가 나온다.
+전처리 줄(`IMAGE_LAYOUT`, `IMAGE_MODE`, `USE_IMAGENET_NORMALIZATION`,
+`CHANNEL_ORDER`)은 2단계에서 쓴 것과 **반드시 같아야 한다.** 전처리는 보정할 때
+쓰는 것과 보드 main이 쓰는 것, 두 곳에 따로 있다. 둘이 어긋나면 양자화 스케일을
+잰 입력과 실제 입력이 달라져 조용히 틀린 답이 나온다.
 
-`OUTPUT_NAME` 은 번들이 내보내는 출력 텐서 이름이다. 미리 알기 어려우므로
-일단 비워 두고 한 번 돌린다. `gen-bundle.sh` 가 번들 생성을 마치면
-`번들이 내보내는 심볼 (OUTPUT_NAME 후보)` 목록을 찍는다. 보통 ONNX 출력 이름에
-`__1` 이 붙은 형태다(ResNet-18이면 `resnetv10_dense0_fwd__1`). 거기서 골라
-설정에 적고 다시 푸시한다.
+`OUTPUT_NAME` 은 일단 `TBD` 처럼 아무 값이나 넣어 둔다. **비워 두면 안 된다.**
+`gen-bundle.sh` 는 이 값이 비어 있으면 후보 목록을 찍기 전에 멈춘다.
 
-#### 5단계 — 푸시한다
+#### 5단계 — 푸시 전에 PC에서 번들을 미리 만들어 본다
+
+CI가 할 일을 PC에서 똑같이 한 번 해 본다. 번들이 만들어지지 않는 모델을 보드
+앞까지 보낼 이유가 없다. 명령은 워크플로의 「번들 생성(컨테이너)」 단계와 같다.
+WSL에서:
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v ~/nestc-upstream:/src \
+  -v /mnt/c/Users/ehdgn/SOTA/nestc:/work -w /work \
+  leejaymin/nestc-ssh:latest \
+  bash scripts/gen-bundle.sh \
+    --conf models/mymodel.conf \
+    --tools /src/build/glow/bin \
+    --upstream /src \
+    --out /src/bundle-try-mymodel
+```
+
+출력 위치를 상류 트리(`~/nestc-upstream/bundle-try-mymodel`)로 둔 것은 이
+저장소에 시험 번들이 섞여 커밋되지 않게 하려는 것이다.
+
+끝나면 다섯 가지를 확인한다.
+
+| 확인할 것 | 어디서 | 정상이면 |
+|---|---|---|
+| 보정 프로파일 | `== 1단계` 다음 줄 | `calib.yaml N 줄`, N이 0이 아니다 |
+| 번들 생성 | `== 2단계` 이후 | `unhandled instruction` 이나 `Not supported` 가 없다 |
+| 가중치 크기 | `== 완료` 아래 목록 | `*.weights.bin` 이 있고 크기가 파라미터 수 × 1바이트에 가깝다 |
+| 출력 이름 | `== 번들이 내보내는 심볼` | 1단계의 ONNX 출력 이름에 `__1` 같은 꼬리가 붙은 것이 보인다 |
+| main 전처리 | `main   틀에서 생성` 다음 줄 | 범위·채널·정규화가 4단계 설정과 같다 |
+
+SqueezeNet의 출력 이름 후보에는 `squeezenet0_flatten0_reshape0__1` 이 있었다.
+이것을 `OUTPUT_NAME` 에 적는다. 번들 생성이 여기서 실패하면 보드로 가지 말고
+「어디서 막히는가」 표로 간다.
+
+#### 6단계 — 푸시하고 실행시킨다
 
 ```powershell
 git add models
@@ -396,15 +517,49 @@ git commit -m "models: mymodel 추가"
 git push sota main
 ```
 
-`models/**` 가 바뀌었으므로 `model-test` 워크플로가 자동으로 기동한다.
+**푸시만으로는 이 모델이 돌지 않는다.** `model-test` 워크플로는 `models/**`
+변경으로 기동하지만, 푸시로 기동할 때는 어떤 conf가 바뀌었는지 보지 않고
+`resnet18` 을 돌린다(워크플로의 `inputs.model || 'resnet18'`). 푸시로 시작된
+실행은 "파이프라인이 망가지지 않았는가"를 ResNet-18로 확인하는 회귀 검사다.
 
-#### 6단계 — 결과를 본다
+새 모델은 손으로 실행시킨다.
 
-https://github.com/SOTA-PNU/nestc-zcu102/actions 에서 방금 실행을 연다.
-단계는 순서대로 모델 기술서 확인, SSH 준비, 컴파일러 확인, 번들 생성(컨테이너),
-보드로 전송, 스크립트 전송, 보드에서 빌드하고 실행이다.
+1. https://github.com/SOTA-PNU/nestc-zcu102/actions 에서 왼쪽 목록의
+   **model-test** 를 고른다.
+2. 오른쪽의 **Run workflow** 를 누르고, 브랜치는 `main`, `model` 에 `mymodel`
+   (확장자 없이)을 넣는다. `rebuild_bundle` 은 켜 둔다.
+3. 초록 **Run workflow** 버튼을 누른다.
 
-마지막 단계의 출력이 결론이다.
+보드는 한 대뿐이라 푸시로 시작된 ResNet-18 실행이 있으면 그것이 끝날 때까지
+기다린다. 기다리는 것이 정상이다. **어느 쪽도 취소하지 않는다**(5.5절).
+
+#### 7단계 — 푸시 뒤에 일어나는 일
+
+실행을 열면 단계가 순서대로 보인다. 각 단계가 이 문서 앞부분의 어느 원리에
+해당하는지, 무엇을 남기는지를 알아 두면 어디서 멈췄는지 바로 읽힌다.
+
+| Actions 단계 | 어디서 | 하는 일 | 원리 | 남기는 것 |
+|---|---|---|---|---|
+| 모델 기술서 확인 | PC 러너 | conf 파일이 있는지 보고 내용을 찍는다 | — | 로그에 conf 내용 |
+| SSH 준비 | PC 러너 | 시크릿으로 접속 키를 만들고 보드에 붙어 본다 | — | 로그에 보드의 `uname`, `free` |
+| 컴파일러 확인 | PC 러너 | `model-compiler`, `image-classifier` 와 도커 이미지가 있는지 본다 | — | — |
+| 번들 생성 (컨테이너) | PC 컨테이너 | 5단계와 같은 일 | 4.3, 4.4 | `calib.yaml`, 번들 네 파일, `Main.cpp`, `bundle.conf` |
+| 보드로 전송 | PC → 보드 | scp | — | 보드의 `~/bundles/mymodel/` |
+| 스크립트 전송 | PC → 보드 | `board-build-run.sh` 를 보낸다 | — | — |
+| 보드에서 빌드하고 실행 | 보드 | 컴파일 → 링크 → 세 장 추론 → `Result:` 줄로 판정 | 4.5, 4.6 | `~/model-mymodel.log` |
+| 로그 회수·업로드 | 보드 → PC → GitHub | 실패해도 항상 돈다 | — | Artifacts의 `model-mymodel` |
+
+걸리는 시간은 ResNet-18 기준으로 보정이 몇 초, 번들 생성이 수십 초다.
+보드에서는 이미지 한 장 추론에 약 1.5초가 걸린다(generic CPU 폴백 기준, 8단계).
+가장 오래 걸리는 것은 보드의 컴파일이다. 모델이 클수록 번들 `.cpp` 가 커져서
+더 오래 걸린다.
+
+**「보드에서 빌드하고 실행」 단계에서 VTA가 열린다.** 이 단계가 돌고 있을 때
+취소하면 FPGA와 xlnk가 정리되지 않아, 재부팅하기 전까지 보드를 쓸 수 없다.
+
+#### 8단계 — 결과를 읽는다
+
+마지막 단계의 출력이 결론이다. 통과하면 이렇게 나온다(ResNet-18).
 
 ```
    OK   cat_285    281  (0.533373, 1476.76ms)
@@ -413,33 +568,81 @@ https://github.com/SOTA-PNU/nestc-zcu102/actions 에서 방금 실행을 연다.
    == 전부 통과
 ```
 
-실패하면 Artifacts에 `model-mymodel` 이 올라와 있다. 보드의 빌드·실행 로그와
-`calib.yaml` 이 들어 있어 원인을 찾을 수 있다.
+`OK` 는 클래스가 `EXPECT` 와 같다는 뜻일 뿐이다. 숫자 두 개를 더 읽는다.
+
+- **확신도.** 2단계 표의 ②③과 나란히 놓는다. 클래스는 같은데 확신도가 크게
+  다르면 아직 통과지만 기록해 둔다. ResNet-18의 0.533373은 ETRI 배포 번들의
+  0.478113과 다른데, 상류가 쓰는 `VTASkipQuantizeNodes.txt`(첫 층 몇 개의
+  양자화 생략)를 `gen-bundle.sh` 가 아직 하지 않기 때문이다.
+- **시간.** 약 1,477 ms는 보드가 CPU 폴백을 generic 구현으로 빌드되어 있어서다.
+  같은 번들을 aarch64 구현으로 빌드하면 ResNet-18이 약 110 ms다. 이 숫자를
+  성능 결과로 인용하지 않는다.
+
+**실패하면** 이렇게 나온다. SqueezeNet의 실제 결과다.
+
+```
+   FAIL cat_285    기대 281  실제 905  (..., ...)
+   FAIL dog_207    기대 205  실제 904  (..., ...)
+   FAIL zebra_340  기대 340  실제 533  (..., ...)
+   == 실패 있음
+```
+
+순서대로 따라간다.
+
+1. **로그를 받는다.** 실행 페이지 맨 아래 **Artifacts** 에서 `model-mymodel` 을
+   내려받는다. 압축을 풀면 보드 로그(`model-mymodel.log`)와 보정 프로파일
+   (`calib.yaml`)이 있다.
+2. **로그에서 어디까지 갔는지 본다.** `== 컴파일`, `== 링크`, `== 실행` 중
+   어디까지 찍혔는지 본다. `== 실행` 까지 갔다면 빌드는 문제가 아니다.
+3. **사다리에 ④를 채운다.**
+
+   | 입력 | ① float | ② int8 | ③ VTA 흉내 | ④ 보드 |
+   |---|---|---|---|---|
+   | cat_285 | 281 | 281 | 검증 중 | **905** |
+   | dog_207 | 205 | 205 | 검증 중 | **904** |
+   | zebra_340 | 340 | 340 | 검증 중 | **533** |
+
+4. **처음으로 어긋난 칸을 찾는다.** 그 칸이 원인의 범위다.
+   - ①과 ②가 다르다 → 양자화 손실. 보정 이미지나 양자화 설정을 본다.
+   - ②와 ③이 다르다 → VTA 연산 정의(VTAInterpreter) 문제.
+   - ③과 ④가 다르다 → 하드웨어 경로, 타일링, CPU 폴백 구현 문제.
+
+SqueezeNet은 ②까지 맞고 ④에서 무너졌다. 양자화는 원인이 아니라는 뜻이다.
+Concat 구현을 따로 검증해 무죄를 확인했고, 지금은 ③을 채워서 원인이 VTA
+연산 정의 쪽인지 하드웨어 쪽인지 가리는 중이다(`patches/vta-concat-support.md`).
+2단계를 건너뛰었다면 이 범위를 좁힐 근거가 없었을 것이다.
 
 #### 어디서 막히는가
 
-| 단계 | 증상 | 원인 |
-|---|---|---|
-| 번들 생성 | `Mismatch between input image and ONNX input shape` | `INPUT_NAME` 또는 `INPUT_SHAPE` 가 모델과 다르다. 1단계를 다시 한다 |
-| 번들 생성 | `is an unhandled instruction` 또는 조용히 중단 | VTA 백엔드가 그 연산을 모른다. Concat이 가장 흔하다 |
-| 번들 생성 | `weights.bin 이 없다` | `model-compiler` 가 실패했다. 그 위 출력을 본다 |
-| 보드 빌드 | `undefined reference to ...` | 자동 생성된 main의 접두사가 번들과 다르다. 번들 소스 파일 이름을 확인한다 |
-| 보드 실행 | 입력을 바꿔도 결과가 같다 | `transpose()` 스텁을 밟고 있다. 패치를 확인한다 |
-| 보드 실행 | `Result` 는 나오는데 기대값과 다르다 | 2단계의 전처리와 설정의 전처리가 어긋났을 가능성이 크다 |
-| 보드 실행 | 결과가 늘 0이거나 의미 없는 값 | `OUTPUT_NAME` 이 틀렸다. 번들 생성 로그의 후보 목록을 본다 |
+| 단계 | 증상 | 확인할 곳 | 원인과 조치 |
+|---|---|---|---|
+| 2·5 보정 | `Mismatch between input image and ONNX input shape` | 보정 출력 첫 오류 | `INPUT_SHAPE` 나 `IMAGE_LAYOUT` 이 ONNX 선언과 다르다. 1단계를 다시 한다 |
+| 2·5 보정 | `No node under name ...` | 같은 곳 | `INPUT_NAME` 이 틀렸다. 1단계 출력의 입력 이름을 그대로 쓴다 |
+| 2·5 보정 | softmax가 NaN | ① float 결과 | 전처리 이중 적용 또는 누락. 1단계 ③을 다시 본다 |
+| 5 번들 | `is an unhandled instruction` 또는 조용히 중단 | `== 2단계` 이후 | VTA 백엔드가 그 연산을 모른다. Concat은 패치가 필요하다 |
+| 5 번들 | `weights.bin 이 없다` | `== 완료` 위 | `model-compiler` 가 실패했다. 그 위 출력을 본다 |
+| 5 번들 | `OUTPUT_NAME 이 필요하다` | 마지막 줄 | conf의 `OUTPUT_NAME` 이 비었다. `TBD` 라도 넣는다 |
+| 6 실행 | 내 모델이 아니라 ResNet-18이 돈다 | 실행 제목, `CONF` 환경 변수 | 푸시로 기동했다. Run workflow로 `model` 을 지정한다 |
+| 6 실행 | 실행이 대기 상태로 멈춰 있다 | Actions 목록 | 다른 실행이 보드를 쓰는 중이다. 기다린다. 취소하지 않는다 |
+| 7 보드 빌드 | `undefined reference to ...` | Artifacts 로그의 `== 링크` | main의 접두사가 번들과 다르거나, 보드 vtalib에 패치가 없다 |
+| 8 실행 | 입력을 바꿔도 결과가 같다 | Artifacts 로그의 `Result:` 줄 | `transpose()` 스텁을 밟고 있다. 보드 vtalib의 패치를 확인한다 |
+| 8 실행 | `Result` 는 나오는데 기대값과 다르다 | 2단계 사다리 | 사다리에 ④를 채워 처음 어긋난 칸을 찾는다 |
+| 8 실행 | 결과가 늘 0이거나 의미 없는 값 | 5단계 심볼 목록 | `OUTPUT_NAME` 이 틀렸다 |
 
 ---
 
 ## 5. 경로 D — GitHub 푸시로 추론하기
 
 경로 C를 자동화한 것이다. 모델 기술서 하나를 저장소에 푸시하면 CI가 번들을
-만들어 보드로 보내고, 추론을 돌려 기대값과 대조한다. 사람이 손댈 일이 없다.
+만들어 보드로 보내고, 추론을 돌려 기대값과 대조한다. 푸시로 기동하면 ResNet-18
+회귀 검사가 돌고, 새 모델은 **Run workflow** 에서 이름을 지정해 돌린다.
 
 ### 5.1 구성
 
 ```
   GitHub (SOTA-PNU/nestc-zcu102)
-     │ push: models/**
+     │ push: models/**  → resnet18 회귀 검사
+     │ Run workflow (model=<이름>) → 그 모델
      ▼
   PC 의 self-hosted 러너 (WSL x64)
      │ ① 컨테이너에서 번들 생성   scripts/gen-bundle.sh
@@ -460,8 +663,10 @@ GitHub Actions의 자바스크립트 액션이 돌지 않고, 가용 메모리�
 
 ### 5.2 새 모델 올리기
 
-`models/<이름>.conf` 를 만들어 푸시하는 것이 전부다. `models/resnet18.conf` 를
-복사해 값을 바꾸면 된다.
+`models/<이름>.conf` 를 만들어 푸시한 뒤, Actions에서 **Run workflow** 로
+`model` 에 그 이름을 넣어 실행시킨다. 푸시만 하면 ResNet-18 회귀 검사가 돈다
+(실전 예시 6단계). 레이아웃이 같은 모델의 설정(`resnet18.conf` 는 NHWC,
+`squeezenet.conf` 는 NCHW)을 복사해 값을 바꾸면 된다.
 
 ```sh
 MODEL_NAME=내모델
@@ -483,16 +688,19 @@ EXPECT="cat_285:281 dog_207:207 zebra_340:340"
 채우기 전에 정해야 할 것이 셋 있다.
 
 **입력 이름과 형상.** 추측하지 말고 모델에서 읽는다. `python3 -c "import onnx;
-m=onnx.load('모델.onnx'); print(m.graph.input)"` 로 확인한다. Glow는 내부적으로
-NHWC로 다루므로 채널이 마지막에 온다.
+m=onnx.load('모델.onnx'); print(m.graph.input)"` 로 확인한다. 형상과 레이아웃은
+**ONNX가 선언한 그대로** 적는다. `[1,3,224,224]` 면 NCHW, `[1,224,224,3]` 이면
+NHWC다. 전처리를 모델이 품고 있는지도 함께 본다(실전 예시 1단계).
 
 **출력 텐서 이름.** `OUTPUT_NAME` 에 적는다. Main.cpp는 자동 생성되지만
-이 이름만은 접두사에서 파생되지 않아 따로 알려 주어야 한다. 모르면 비워 두고
-한 번 돌리면 `gen-bundle.sh` 가 후보 목록을 찍는다.
+이 이름만은 접두사에서 파생되지 않아 따로 알려 주어야 한다. 모르면 `TBD` 같은
+임시값을 넣고 PC에서 `gen-bundle.sh` 를 한 번 돌리면 후보 목록을 찍는다.
+비워 두면 목록을 찍기 전에 멈춘다(실전 예시 5단계).
 
-**기대값.** 새 모델은 정답을 모르므로 판정 기준을 먼저 만들어야 한다. float
-또는 VTAInterpreter로 PC에서 돌린 결과를 골든으로 삼는다. 이것이 없으면 CI가
-무엇을 가지고 통과를 판단할지 알 수 없다.
+**기대값.** 새 모델은 정답을 모르므로 판정 기준을 먼저 만들어야 한다. PC에서
+float, int8, VTAInterpreter 순으로 돌려 기준값 사다리를 만들고, 보드에 가장
+가까운 칸의 값을 골든으로 삼는다(실전 예시 2단계). 이것이 없으면 CI가 무엇을
+가지고 통과를 판단할지 알 수 없고, 어긋났을 때 원인의 범위도 좁힐 수 없다.
 
 ### 5.3 기대값은 "정답"이 아니라 "어제와 같은 값"이다
 
