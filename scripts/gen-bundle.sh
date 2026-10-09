@@ -140,10 +140,69 @@ else
   : "${OUTPUT_NAME:?전용 main 을 쓰지 않으려면 conf 에 OUTPUT_NAME 이 필요하다}"
   TMPL=$(resolve "${MAIN_TEMPLATE:-upstream:vta/bundles/Resnet18Test/mxnet_exported_resnet18BundleMain.cpp}")
   [ -f "$TMPL" ] || { echo "틀 main 없음: $TMPL" >&2; exit 1; }
-  sed -e "s/mxnet_exported_resnet18/$BASE/g" \
-      -e "s/resnetv10_dense0_fwd__1/$OUTPUT_NAME/g" \
-      "$TMPL" > "$OUT/Main.cpp"
+
+  # 전처리는 두 곳에 있다. 보정할 때 image-classifier 가 쓰는 것과,
+  # 보드에서 Main.cpp 가 직접 하는 것. 둘이 어긋나면 양자화 스케일과 실제
+  # 입력이 맞지 않아 조용히 틀린 답이 나온다. 그래서 여기서 맞춰 준다.
+  #
+  # 틀(ResNet-18 용)은 0~255 범위에 RGB→BGR 뒤집기를 하고 정규화는 없다.
+  RANGE_MAX=255.0
+  [ "$IMAGE_MODE" = "0to1" ] && RANGE_MAX=1.0
+
+  MAIN_PY_BASE="$BASE" MAIN_PY_OUT="$OUTPUT_NAME" \
+  MAIN_PY_RANGE="$RANGE_MAX" MAIN_PY_ORDER="${CHANNEL_ORDER:-BGR}" \
+  MAIN_PY_NORM="$USE_IMAGENET_NORMALIZATION" \
+  python3 - "$TMPL" "$OUT/Main.cpp" <<'PYEOF'
+import os, sys
+src, dst = sys.argv[1], sys.argv[2]
+base  = os.environ["MAIN_PY_BASE"]
+out   = os.environ["MAIN_PY_OUT"]
+rng   = os.environ["MAIN_PY_RANGE"]
+order = os.environ["MAIN_PY_ORDER"]
+norm  = os.environ["MAIN_PY_NORM"] == "1"
+
+t = open(src, encoding="utf-8").read()
+t = t.replace("mxnet_exported_resnet18", base)
+t = t.replace("resnetv10_dense0_fwd__1", out)
+
+# 1) 픽셀 범위
+old = "std::pair<float, float> range = std::make_pair(0., 255.0);"
+if old not in t:
+    sys.exit("틀에서 range 를 찾지 못했다")
+t = t.replace(old, "std::pair<float, float> range = std::make_pair(0., %s);" % rng)
+
+# 2) 채널 순서. 틀은 BGR 로 뒤집는다.
+if order.upper() == "RGB":
+    old = "resultT[getXYZW(resultDims, n, 2 - z, x, y)] ="
+    if old not in t:
+        sys.exit("틀에서 채널 변환을 찾지 못했다")
+    t = t.replace(old, "resultT[getXYZW(resultDims, n, z, x, y)] =")
+
+# 3) ImageNet 정규화. 틀에는 없으므로 넣는다.
+if norm:
+    anchor = '  printf("Loaded images size in bytes is: %lu\\n", resultSizeInBytes);'
+    if anchor not in t:
+        sys.exit("틀에서 정규화를 넣을 자리를 찾지 못했다")
+    block = """  // ImageNet 정규화. 보정 단계의 -use-imagenet-normalization 과 맞춘다.
+  {
+    const float mean[3] = {0.485f, 0.456f, 0.406f};
+    const float stdv[3] = {0.229f, 0.224f, 0.225f};
+    for (unsigned nn = 0; nn < numImages; nn++)
+      for (unsigned c = 0; c < 3; c++)
+        for (unsigned y = 0; y < DEFAULT_HEIGHT; y++)
+          for (unsigned x = 0; x < DEFAULT_WIDTH; x++) {
+            float *p = &resultT[getXYZW(resultDims, nn, c, x, y)];
+            *p = (*p - mean[c]) / stdv[c];
+          }
+  }
+"""
+    t = t.replace(anchor, block + anchor)
+
+open(dst, "w", encoding="utf-8").write(t)
+PYEOF
+
   echo "   main   틀에서 생성 (접두사 $BASE, 출력 $OUTPUT_NAME)"
+  echo "          범위 0~$RANGE_MAX, 채널 ${CHANNEL_ORDER:-BGR}, 정규화 $USE_IMAGENET_NORMALIZATION"
 fi
 
 # OUTPUT_NAME 을 잘못 적으면 추론은 되는데 결과를 못 읽는다.
