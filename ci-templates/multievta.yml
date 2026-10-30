@@ -137,7 +137,8 @@ jobs:
               echo "### $m — $V"
               echo ""
               echo '```'
-              grep -E '^   (총|장당|처리량|코어|CMA|Cma)' "logs/multi-$m.log" || echo "(측정값 없음)"
+              grep -E '^   (총|장당|처리량|코어)|^Cma|CMA 현황|fpga_buff_|Check failed' \
+                "logs/multi-$m.log" || echo "(측정값 없음)"
               echo '```'
               echo ""
             } >> logs/summary.txt
