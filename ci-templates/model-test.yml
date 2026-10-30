@@ -1,6 +1,10 @@
 name: model-test
 
-# 새 모델을 번들로 만들어 보드에서 추론까지 시키고 결과를 판정한다.
+# models/ 아래의 모델을 전부 번들로 만들어 보드에서 추론까지 시키고 판정한다.
+#
+# 사람이 하는 일은 푸시 하나뿐이다. 어떤 모델을 돌릴지 고르지 않아도 되고,
+# 결과를 보러 아티팩트를 받지 않아도 된다 — results/latest.md 로 저장소에
+# 다시 커밋되므로 저장소를 당겨 보면 된다.
 #
 # board-test 가 상류 테스트의 회귀를 막는 장치라면, 이쪽은 우리가 올리는
 # 모델을 위한 것이다. 모델 하나는 models/<이름>.conf 하나로 기술한다.
@@ -12,31 +16,22 @@ name: model-test
 #
 # 러너 쪽 사전 준비:
 #   NESTC_UPSTREAM  상류 클론 (기본 ~/nestc-upstream)
-#   NESTC_TOOLS     model-compiler 와 image-classifier 가 있는 디렉터리
-#                   (기본 $NESTC_UPSTREAM/build/glow/bin)
-#   둘 다 없으면 build 워크플로의 nestc-tools 아티팩트를 쓴다.
 
 on:
-  # 모델 기술서나 파이프라인 스크립트가 바뀌면 자동으로 돈다.
-  # 보드가 하나뿐이라 동시 실행을 막는다(아래 concurrency).
   push:
     branches: [main]
     paths:
       - "models/**"
+      - "ci/**"
       - "scripts/gen-bundle.sh"
       - "scripts/board-build-run.sh"
-      - "ci/**"
       - ".github/workflows/model-test.yml"
   workflow_dispatch:
     inputs:
       model:
-        description: "models/ 아래 conf 이름 (확장자 제외)"
+        description: "한 모델만 돌릴 때 이름 (비우면 models/ 전부)"
         type: string
-        default: resnet18
-      rebuild_bundle:
-        description: "번들을 다시 생성 (끄면 보드에 있는 것을 재사용)"
-        type: boolean
-        default: true
+        default: ""
 
 # 보드는 한 대뿐이다. 두 실행이 겹치면 VTA 가 충돌한다.
 # 앞선 실행을 취소하지 않고 기다리게 한다 — VTA 실행 중 취소는 위험하다.
@@ -44,20 +39,18 @@ concurrency:
   group: zcu102-board
   cancel-in-progress: false
 
+# 결과 요약을 저장소에 다시 커밋하기 위해 필요하다.
+permissions:
+  contents: write
+
 jobs:
   model:
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 180
+    timeout-minutes: 240
 
     env:
-      # push 로 돌 때는 inputs 가 비어 있으므로 resnet18 을 기본으로 한다.
-      # 여러 모델을 다루게 되면 matrix 로 바꾼다.
-      CONF: models/${{ inputs.model || 'resnet18' }}.conf
-      MODEL: ${{ inputs.model || 'resnet18' }}
       BOARD_SRC: /home/xilinx/nest-compiler-2024
       BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_board
-      BOARD_BUNDLE: /home/xilinx/bundles/${{ inputs.model || 'resnet18' }}
-      OUT: ${{ github.workspace }}/bundle-out
       # 컴파일러를 빌드한 것과 같은 이미지여야 한다.
       # 라이브러리 버전이 다르면 실행조차 되지 않는다.
       DOCKER_IMAGE: leejaymin/nestc-ssh:latest
@@ -65,14 +58,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: 모델 기술서 확인
+      - name: 돌릴 모델 정하기
+        id: pick
         run: |
           set -eu
-          [ -f "$CONF" ] || { echo "없는 모델: $CONF"; ls models/; exit 1; }
-          echo "--- $CONF ---"
-          grep -v '^#' "$CONF" | grep -v '^$'
+          if [ -n "${{ inputs.model }}" ]; then
+            LIST="${{ inputs.model }}"
+            [ -f "models/$LIST.conf" ] || { echo "없는 모델: $LIST"; ls models/; exit 1; }
+          else
+            LIST=$(ls models/*.conf 2>/dev/null | sed 's|models/||; s|\.conf$||' | tr '\n' ' ')
+          fi
+          [ -n "$LIST" ] || { echo "models/ 에 conf 가 없다"; exit 1; }
+          echo "대상: $LIST"
+          echo "LIST=$LIST" >> "$GITHUB_ENV"
 
       - name: SSH 준비
         run: |
@@ -97,29 +97,23 @@ jobs:
       # 러너의 WSL(22.04)에서는 libprotobuf.so.17 을 찾지 못해 실행되지 않는다.
       # 그래서 번들 생성은 반드시 같은 이미지 안에서 돌린다.
       - name: 컴파일러 확인
-        if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
           UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
-          TOOLS=${NESTC_TOOLS:-$UP/build/glow/bin}
-          [ -x "$TOOLS/model-compiler" ] && [ -x "$TOOLS/image-classifier" ] || {
-            echo "컴파일러가 없다: $TOOLS" >&2
-            echo "docs/03-build-notes.md 를 따라 컨테이너에서 먼저 빌드한다." >&2
-            exit 1; }
+          [ -d "$UP/build" ] || { echo "상류 빌드 트리가 없다: $UP/build" >&2; exit 1; }
           echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
           # 컨테이너 안에서의 경로다. 호스트 경로가 아니다.
           # /root 는 소유자만 접근 가능해 --user 로 돌리면 들어갈 수 없다.
-          # 그래서 상류 트리를 /src 에 마운트한다.
+          # 그래서 번들 생성 때는 상류 트리를 /src 에 마운트한다.
           echo "TOOLS_IN_CONTAINER=/src/build/glow/bin" >> "$GITHUB_ENV"
           docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 || docker pull "$DOCKER_IMAGE"
 
       # 상류에 우리 패치를 적용한다. 전부 멱등하므로 매번 돌려도 안전하다.
       #   patch_concat.py  Concat(InsertTensor/Touch) 번들 경로 지원
       #   patch_tiling.py  튜닝 표에 없는 레이어의 기본 타일링
-      # 바뀐 것이 있을 때만 컴파일러를 다시 빌드한다(증분이라 1~2분).
+      # ninja 는 증분이라 바뀐 것이 없으면 몇 초 만에 끝난다.
       # 빌드 캐시가 /root/nestc 경로로 잡혀 있어 그 마운트를 그대로 써야 한다.
       - name: 컴파일러 패치 적용 및 재빌드
-        if: inputs.rebuild_bundle || github.event_name == 'push'
         run: |
           set -eu
           for p in ci/patch_concat.py ci/patch_tiling.py; do
@@ -127,76 +121,116 @@ jobs:
             echo "--- $p ---"
             python3 "$p" "$NESTC_UPSTREAM"
           done
-          # ninja 는 증분이다. 바뀐 것이 없으면 몇 초 만에 끝나므로
-          # 바뀌었는지 따로 가리지 않고 항상 돌린다.
           docker run --rm -v "$NESTC_UPSTREAM":/root/nestc \
             -w /root/nestc/build "$DOCKER_IMAGE" \
             ninja model-compiler image-classifier
 
-      # 마운트가 둘이다.
-      #   상류 트리  -> /src          (ONNX, 보정 이미지, Main.cpp, 컴파일러)
-      #   작업 공간  -> /work         (모델 기술서, 스크립트, 출력)
-      # --user 로 호스트 사용자 권한을 유지해, 출력이 root 소유로 남지 않게 한다.
-      - name: 번들 생성 (컨테이너)
-        if: inputs.rebuild_bundle || github.event_name == 'push'
+      # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
+      # 재부팅 전까지 사용 불가 상태가 될 수 있다.
+      - name: 모델별 번들 생성과 보드 실행
+        id: run
         run: |
           set -eu
-          mkdir -p "$OUT"
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "$NESTC_UPSTREAM":/src \
-            -v "$GITHUB_WORKSPACE":/work \
-            -w /work \
-            "$DOCKER_IMAGE" \
-            bash scripts/gen-bundle.sh \
-              --conf "$CONF" \
-              --tools "$TOOLS_IN_CONTAINER" \
-              --upstream /src \
-              --out /work/bundle-out
-          ls -la "$OUT"
-
-      - name: 보드로 전송
-        if: inputs.rebuild_bundle || github.event_name == 'push'
-        run: |
-          set -eu
-          ssh board "mkdir -p $BOARD_BUNDLE"
-          scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf \
-            board:"$BOARD_BUNDLE/"
-          ssh board "ls -la $BOARD_BUNDLE"
-
-      - name: 스크립트 전송
-        run: |
+          mkdir -p logs
           scp scripts/board-build-run.sh board:/home/xilinx/board-build-run.sh
           ssh board "chmod +x /home/xilinx/board-build-run.sh"
 
-      # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
-      # 재부팅 전까지 사용 불가 상태가 될 수 있다.
-      - name: 보드에서 빌드하고 실행
-        run: |
-          ssh board "set -eu
-            export PATH=\$HOME/bin:\$PATH
-            /home/xilinx/board-build-run.sh \
-              --bundle $BOARD_BUNDLE \
-              --src $BOARD_SRC \
-              --build $BOARD_BUILD \
-              2>&1 | tee /home/xilinx/model-${{ inputs.model || 'resnet18' }}.log"
+          : > logs/summary.txt
+          HARD_FAIL=0
 
-      - name: 로그 회수
+          for m in $LIST; do
+            echo "::group::$m"
+            CONF="models/$m.conf"
+            OUT="$GITHUB_WORKSPACE/bundle-out/$m"
+            BB="/home/xilinx/bundles/$m"
+
+            # 아직 보드에서 통과하지 못하는 모델은 conf 에 KNOWN_FAIL=1 을 둔다.
+            # 결과는 그대로 기록하되 워크플로 전체를 빨갛게 만들지는 않는다.
+            KNOWN=$(grep -E '^KNOWN_FAIL=1' "$CONF" >/dev/null 2>&1 && echo 1 || echo 0)
+
+            rm -rf "$OUT"; mkdir -p "$OUT"
+            {
+              docker run --rm --user "$(id -u):$(id -g)" \
+                -v "$NESTC_UPSTREAM":/src -v "$GITHUB_WORKSPACE":/work -w /work \
+                "$DOCKER_IMAGE" \
+                bash scripts/gen-bundle.sh --conf "$CONF" \
+                  --tools "$TOOLS_IN_CONTAINER" --upstream /src \
+                  --out "/work/bundle-out/$m"
+
+              ssh board "mkdir -p $BB"
+              scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf board:"$BB/"
+
+              ssh board "set -eu
+                export PATH=\$HOME/bin:\$PATH
+                /home/xilinx/board-build-run.sh --bundle $BB \
+                  --src $BOARD_SRC --build $BOARD_BUILD"
+            } 2>&1 | tee "logs/$m.log" || true
+            # 판정은 종료 코드가 아니라 로그의 판정 줄로 한다.
+            # 번들은 추론에 성공하고도 0 이 아닌 값을 반환하는 경우가 있다.
+
+            if grep -q '^== 전부 통과' "logs/$m.log"; then
+              VERDICT="통과"
+            else
+              VERDICT="실패"
+              [ "$KNOWN" = "1" ] || HARD_FAIL=1
+            fi
+            [ "$KNOWN" = "1" ] && [ "$VERDICT" = "실패" ] && VERDICT="실패 (알려진 실패)"
+
+            # 추론 한 줄씩 뽑아 요약에 남긴다
+            {
+              echo "### $m — $VERDICT"
+              echo ""
+              echo '```'
+              grep -E '^\s+(OK|FAIL) ' "logs/$m.log" || echo "(결과 줄 없음)"
+              echo '```'
+              echo ""
+            } >> logs/summary.txt
+            echo "::endgroup::"
+          done
+
+          echo "HARD_FAIL=$HARD_FAIL" >> "$GITHUB_ENV"
+
+      # 결과를 저장소에 남긴다. 아티팩트를 받지 않아도 되게 하려는 것이다.
+      # results/ 는 push 트리거 경로에 없으므로 자기 자신을 다시 부르지 않는다.
+      - name: 결과를 저장소에 기록
         if: always()
         run: |
-          mkdir -p logs
-          scp board:/home/xilinx/model-${{ inputs.model || 'resnet18' }}.log logs/ 2>/dev/null || true
-          cp -r "$OUT"/calib.yaml logs/ 2>/dev/null || true
-          ls -la logs/
+          set -eu
+          mkdir -p results
+          {
+            echo "# model-test 결과"
+            echo ""
+            echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "- 커밋: ${GITHUB_SHA:0:8}"
+            echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- 대상: ${LIST:-(없음)}"
+            echo ""
+            cat logs/summary.txt 2>/dev/null || echo "(요약 없음 — 실행 전에 멈췄다)"
+          } > results/latest.md
+          cp logs/*.log results/ 2>/dev/null || true
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/
+          git diff --cached --quiet && { echo "변화 없음"; exit 0; }
+          git commit -m "결과: model-test ${GITHUB_RUN_ID} [skip ci]"
+          git pull --rebase --autostash origin main || true
+          git push origin HEAD:main
 
       - name: 로그 업로드
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: model-${{ inputs.model || 'resnet18' }}
+          name: model-test-${{ github.run_id }}
           path: logs/
           retention-days: 30
 
       - name: 키 정리
         if: always()
         run: rm -f ~/.ssh/board_key
+
+      - name: 판정
+        if: always()
+        run: |
+          cat logs/summary.txt 2>/dev/null || true
+          [ "${HARD_FAIL:-0}" = "0" ] || { echo "알려지지 않은 실패가 있다"; exit 1; }
+          echo "알려지지 않은 실패 없음"
