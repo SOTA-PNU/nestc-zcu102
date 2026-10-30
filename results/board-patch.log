@@ -1,10 +1,33 @@
 전부 이미 패치되어 있다.
 경고: 기준 구현과 다름, 건너뜀 — vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
 --- VTABundle 빌드 ---
-[100%] Built target vta_runtime
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp: In function ‘int splat(int8_t*, uint32_t, int8_t)’:
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:4958:17: warning: comparison between signed and unsigned integer expressions [-Wsign-compare]
+   for(int i=0; i<size; i+=16)
+                ~^~~~~
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp: In function ‘int elemmax(int8_t*, float, int32_t, int8_t*, float, int32_t, int8_t*, float, int32_t, uint32_t)’:
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:4988:19: warning: comparison between signed and unsigned integer expressions [-Wsign-compare]
+     for(int i=0; i<size; i+=16)
+                  ~^~~~~
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:4987:9: warning: unused variable ‘s’ [-Wunused-variable]
+     int s = size/16;
+         ^
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp: In function ‘void transpose_nhwc2vtaio(int8_t*, int8_t*, int, int, int, int)’:
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:5085:11: warning: unused variable ‘IN_NHWC’ [-Wunused-variable]
+   int8_t *IN_NHWC = input;
+           ^~~~~~~
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp: In member function ‘int64_t PerfEvent::Stop()’:
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:69:9: warning: ignoring return value of ‘ssize_t read(int, void*, size_t)’, declared with attribute warn_unused_result [-Wunused-result]
+     read(fd, &count, sizeof(count));
+     ~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp: In function ‘void fwdConvolution_nchw_mm_v3(int8_t*, int8_t*, int8_t*, int8_t*, float, float, float, float, int32_t, int32_t, int32_t, int32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, int, int, size_t, size_t, bool, bool, int, int)’:
+/home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp:3767:15: warning: ‘pRtn’ is used uninitialized in this function [-Wuninitialized]
+   pthread_join(p_thread[0], (void **)pRtn);
+   ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[100%] Linking CXX static library libVTABundle.a
 [100%] Built target VTABundle
 --- 라이브러리 ---
--rw-rw-r-- 1 xilinx xilinx 123040 Oct 30 07:33 vta/vtalib/libVTABundle.a
+-rw-rw-r-- 1 xilinx xilinx 236580 Oct 30 22:39 vta/vtalib/libVTABundle.a
 --- 소스에 패치 표식 ---
 1
 --- 라이브러리에 패치 표식 (0 이면 재빌드 안 된 것) ---
