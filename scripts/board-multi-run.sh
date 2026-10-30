@@ -96,6 +96,21 @@ IMGDIR=$SRC/glow/tests/images/imagenet
 IMG=${MULTI_IMAGE:-cat_285}
 [ -f "$IMGDIR/$IMG.png" ] || { echo "이미지 없음 $IMGDIR/$IMG.png" >&2; exit 1; }
 
+# FPGA 는 연속 물리 메모리(CMA)를 쓴다. 코어마다 가중치·활성 버퍼를 따로
+# 잡으므로 네 배가 필요하다. 모자라면 dat_queue.h 의
+# "Check failed: fpga_buff_ != nullptr" 로 죽는다. 먼저 재 둔다.
+echo "-- CMA 현황 --"
+grep -i cma /proc/meminfo || echo "(meminfo 에 CMA 항목 없음)"
+[ -r /sys/class/xlnk/xlnk/xlnk_bufpool_size ] && cat /sys/class/xlnk/xlnk/xlnk_bufpool_size || true
+echo "-- 번들당 요구량 --"
+for h in "$BUNDLE"/*.h; do
+  case "$(basename "$h")" in VTARuntime.h) continue ;; esac
+  printf '   %-40s ' "$(basename "$h")"
+  grep -h "Total data size" "$h" | head -1 | tr -d '\n'
+  echo
+done
+ls -l "$BUNDLE"/*.weights.bin | awk '{printf "   %-40s %s bytes\n", $NF, $5}'
+
 out=$(sudo -E env PATH="$PATH" "./${MODEL_NAME}_multi" "$IMGDIR/$IMG.png" 2>&1 || true)
 echo "$out" | tail -8
 

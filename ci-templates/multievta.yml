@@ -126,9 +126,9 @@ jobs:
                 export PATH=\$HOME/bin:\$PATH
                 /home/xilinx/board-multi-run.sh --bundle $BB \
                   --src $BOARD_SRC --build $BOARD_BUILD"
-            } 2>&1 | tee "logs/$m.log" || true
+            } 2>&1 | tee "logs/multi-$m.log" || true
 
-            if grep -q '^== 전부 통과' "logs/$m.log"; then
+            if grep -q '^== 전부 통과' "logs/multi-$m.log"; then
               V="통과"
             else
               V="실패"; FAILED=1
@@ -137,7 +137,7 @@ jobs:
               echo "### $m — $V"
               echo ""
               echo '```'
-              grep -E '^   (총|장당|처리량|코어)' "logs/$m.log" || echo "(측정값 없음)"
+              grep -E '^   (총|장당|처리량|코어|CMA|Cma)' "logs/multi-$m.log" || echo "(측정값 없음)"
               echo '```'
               echo ""
             } >> logs/summary.txt
