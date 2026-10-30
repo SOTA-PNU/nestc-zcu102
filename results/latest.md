@@ -1,16 +1,16 @@
 # model-test 결과
 
-- 시각: 2026-10-30 22:40 UTC
-- 커밋: 49e6195f
-- 실행: https://github.com/SOTA-PNU/nestc-zcu102/actions/runs/41139472697
-- 대상: resnet18
+- 시각: 2026-10-30 22:42 UTC
+- 커밋: 5a318a96
+- 실행: https://github.com/SOTA-PNU/nestc-zcu102/actions/runs/41139816505
+- 대상: squeezenet
 - 보드 빌드: build_aarch64
 
-### resnet18 — 통과
+### squeezenet — 실패 (알려진 실패)
 
 ```
-   OK   cat_285  281  (0.478113, 91.599ms)
-   OK   dog_207  207  (0.977876, 93.138ms)
-   OK   zebra_340  340  (0.969942, 92.738ms)
+   FAIL cat_285  기대 281  실제 905  (0.072325, 174.183ms)
+   FAIL dog_207  기대 205  실제 904  (0.222572, 175.133ms)
+   FAIL zebra_340  기대 340  실제 533  (0.095507, 175.871ms)
 ```
 
