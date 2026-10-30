@@ -54,6 +54,19 @@ GitHub Actions → **debug-dump** → Run workflow → model 에 `squeezenet`
 이미 배제한 것은 `patches/vta-relu-saturation.md` 의 「추적 경로」에 번호순으로
 적어 두었다. 같은 곳을 다시 파지 않도록 먼저 읽는다.
 
+**지금 가장 유력한 가설** (밤에 소스를 더 읽어 좁혔다, 근거는
+`patches/vta-tiling-fallback.md` 끝에):
+
+SqueezeNet 의 squeeze 층은 출력이 **16 채널**이다. VTA 의 출력 블록이 16 이므로
+블록 하나다. 그러면 `conv_kernel` 에서 `nFilterinLoop = 1`, 그리고
+`nVirtualThread` 는 1 일 수밖에 없다(2 면 0 으로 나눈다). 튜닝 표의 ResNet
+항목 열한 개는 **전부 `nVirtualThread = 2`** 이고 출력 채널 최소가 64 다.
+즉 이 조합은 상류가 한 번도 실행해 본 적이 없다.
+
+덤프를 보면 바로 갈린다 — squeeze 층(`conv1`, `conv4`, `conv7` …)의 출력이
+처음 망가지는 지점이면 가설이 맞다. 그 앞이 멀쩡하고 expand 층부터 틀리면
+다른 이야기다.
+
 ## 3. 연구실 서버
 
 지금 가장 약한 고리다. 러너가 개인 PC 의 WSL 에 있어서 PC 가 꺼지면 아무것도

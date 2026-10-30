@@ -84,3 +84,48 @@ NCHW 는 `[2],[3]`) 스크립트가 각 자리 앞의 `dest->dims()` 사용을 �
 `VTASchedules.h` 의 손튜닝 표는 ResNet 전용이며, 표에 없는 레이어의 기본값
 `1, 14, 14` 는 폭 방향 타일링을 깨운다. 그 경로는 표의 어떤 항목도 밟지 않으므로
 사실상 검증되지 않은 상태다. 최소한 기본값을 `tileW = 출력 폭` 으로 두기를 권한다.
+
+
+## 왜 타일 크기를 바꿔도 결과가 같았나 (2026-10-30 밤)
+
+패치를 넣고 보드에서 다시 돌렸더니 SqueezeNet 결과가 905/904/533 으로, 신뢰도
+끝자리까지 **완전히 동일**했다. 타일 크기가 실제로 `1, 14, 14` 에서
+`1, 8, 55` 로 바뀐 것은 생성 코드에서 확인했는데도 그랬다.
+
+`VTABundle.cpp` 의 `conv_kernel` 을 보면 이유가 나온다.
+
+```c
+uint32_t ACC_MEM_ENTRY = 2048;
+uint32_t nFilterinLoop = KN / nVirtualThread / 16;
+nFilterinLoop = min(nFilterinLoop,
+                    ACC_MEM_ENTRY / nVirtualThread / outTileH / outTileW);
+for (; nFilterinLoop > 0; nFilterinLoop--)
+  if ((KN/16) % (nFilterinLoop*nVirtualThread) == 0) break;
+```
+
+타일 크기는 이 `min` 의 둘째 항에만 들어간다. SqueezeNet 의 55×55 층에서
+
+| 타일 | 둘째 항 | squeeze (KN=16) | expand (KN=64) |
+|---|---|---|---|
+| 14×14 (옛 기본값) | 2048/196 = 10 | min(1,10) = 1 | min(4,10) = 4 |
+| 8×55 (새 기본값) | 2048/440 = 4 | min(1,4) = 1 | min(4,4) = 4 |
+
+**둘 다 같은 값이 나온다.** 즉 발행되는 VTA 명령 구성이 동일하므로 결과가 같은
+것이 당연하다. 패치가 무효였던 것이 아니라, 이 모델에서는 구분되지 않는 변경이다.
+
+폭 방향 타일링이 상류에서 한 번도 쓰이지 않았다는 사실은 그대로이고, 다른
+모델에서는 드러날 수 있으므로 패치는 유지한다.
+
+## 덤으로 좁혀진 것 — `nVirtualThread = 1`
+
+같은 식에서 `KN = 16` 이면 `KN / nVirtualThread / 16` 이 1 이 되어야 하므로
+`nVirtualThread` 는 **1 일 수밖에 없다**. 2 로 두면 `16/2/16 = 0` 이 되고
+바로 아래에서 0 으로 나눈다.
+
+그런데 튜닝 표의 ResNet 항목 열한 개는 **전부 `nVirtualThread = 2`** 다.
+즉 SqueezeNet 의 squeeze 층(출력 16채널)은 "출력 블록 하나, 가상 스레드 하나" 라는
+ResNet 이 한 번도 밟지 않은 조합으로 들어간다. 폭 타일링과 같은 종류의
+미검증 경로이고, 지금 가장 유력한 자리다.
+
+확인하려면 층별 덤프(`debug-dump` 워크플로)로 squeeze 층의 출력부터 보면 된다.
+거기가 처음 망가지는 지점이면 가설이 맞는 것이다.
