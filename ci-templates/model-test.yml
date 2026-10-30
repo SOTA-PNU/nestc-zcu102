@@ -131,13 +131,24 @@ jobs:
       # 바뀐 것이 없으면 금방 끝난다.
       - name: 보드 런타임 패치 적용 및 재빌드
         run: |
-          set -eu
+          # pipefail 이 없으면 tee/tail 의 종료 코드만 보게 되어
+          # 보드 빌드가 실패해도 조용히 통과한다.
+          set -euo pipefail
+          mkdir -p logs
           scp ci/patch_relu_rescale.py board:/home/xilinx/
-          ssh board "set -eu
+          ssh board "set -euo pipefail
             python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
             cd /home/xilinx/nest-compiler-2024/build_board
-            make -j1 VTABundle 2>&1 | tail -15
-            nm -C vta/vtalib/libVTABundle.a | grep -c 'T relu' || true"
+            echo '--- VTABundle 빌드 ---'
+            make -j1 VTABundle 2>&1 | tail -25
+            echo '--- 라이브러리 ---'
+            ls -l vta/vtalib/libVTABundle.a
+            echo '--- 소스에 패치 표식 ---'
+            grep -c nestc_relu_rescale_patch \
+              /home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_generic.cpp
+            echo '--- 라이브러리에 패치 표식 (0 이면 재빌드 안 된 것) ---'
+            strings vta/vtalib/libVTABundle.a | grep -c nestc_relu || true" \
+            2>&1 | tee logs/board-patch.log
 
       # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
       # 재부팅 전까지 사용 불가 상태가 될 수 있다.
