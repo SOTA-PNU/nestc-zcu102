@@ -8,29 +8,29 @@ Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 22:39:49.905709    24 HostManager.cpp:242] Destroying host manager...
+I1030 23:24:19.162194    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 BGR, 정규화 0
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "resnetv10_dense0_fwd__1"
 == 완료
 total 11828
-drwxr-xr-x 2 1000 1000     4096 Oct 30 22:39 .
-drwxr-xr-x 3 1000 1000     4096 Oct 30 22:39 ..
--rw-r--r-- 1 1000 1000    16320 Oct 30 22:39 Main.cpp
--rw-r--r-- 1 1000 1000     3762 Oct 30 22:39 VTARuntime.h
--rw-r--r-- 1 1000 1000       67 Oct 30 22:39 bundle.conf
--rw-r--r-- 1 1000 1000    26235 Oct 30 22:39 calib.yaml
--rw-r--r-- 1 1000 1000    40427 Oct 30 22:39 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1000 1000     2190 Oct 30 22:39 mxnet_exported_resnet18.h
--rw-r--r-- 1 1000 1000 12003168 Oct 30 22:39 mxnet_exported_resnet18.weights.bin
+drwxr-xr-x 2 1000 1000     4096 Oct 30 23:24 .
+drwxr-xr-x 3 1000 1000     4096 Oct 30 23:24 ..
+-rw-r--r-- 1 1000 1000    16320 Oct 30 23:24 Main.cpp
+-rw-r--r-- 1 1000 1000     3762 Oct 30 23:24 VTARuntime.h
+-rw-r--r-- 1 1000 1000       67 Oct 30 23:24 bundle.conf
+-rw-r--r-- 1 1000 1000    26235 Oct 30 23:24 calib.yaml
+-rw-r--r-- 1 1000 1000    40427 Oct 30 23:24 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1000 1000     2190 Oct 30 23:24 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 23:24 mxnet_exported_resnet18.weights.bin
 == 번들 resnet18  소스 mxnet_exported_resnet18.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_aarch64/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_aarch64/vta/vtalib/libvta_runtime.a
    ACL         3개
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dlpack/include
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dmlc-core/include
-   CMA 여유 240560 kB (필요 추정 40000 kB, 단일 코어)
+   CMA 여유 240540 kB (필요 추정 40000 kB, 단일 코어)
 == 컴파일
 Main.cpp: In function ‘int main(int, char**)’:
 Main.cpp:455:79: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
@@ -48,7 +48,7 @@ Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
                  ^~~~~~~~~~~~~~~~~~~~~
 == 링크
 == 실행
-   OK   cat_285  281  (0.478113, 91.599ms)
-   OK   dog_207  207  (0.977876, 93.138ms)
-   OK   zebra_340  340  (0.969942, 92.738ms)
+   OK   cat_285  281  (0.478113, 92.575ms)
+   OK   dog_207  207  (0.977876, 91.612ms)
+   OK   zebra_340  340  (0.969942, 92.231ms)
 == 전부 통과
