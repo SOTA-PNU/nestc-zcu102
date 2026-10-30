@@ -130,6 +130,14 @@ jobs:
             echo '```'
             sed -n '/--- 분석 ---/,$p' "logs/dump-$MODEL.log" 2>/dev/null | head -200
             echo '```'
+            echo ""
+            echo "## 보정 범위 (calib.yaml)"
+            echo ""
+            echo "덤프의 int8 최대값에 그 층의 스케일을 곱한 값이 아래 범위와"
+            echo "크게 다르면 그 층에서 크기가 어긋난 것이다."
+            echo '```'
+            sed -n '1,400p' "debug-out/$MODEL/calib.yaml" 2>/dev/null || echo "(없음)"
+            echo '```'
           } > "results/debug-$MODEL.md"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

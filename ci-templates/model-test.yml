@@ -35,8 +35,8 @@ on:
       board_build:
         description: "보드 빌드 디렉터리. generic=build_board, NEON+ACL=build_aarch64"
         type: choice
-        options: [build_board, build_aarch64]
-        default: build_board
+        options: [build_aarch64, build_board]
+        default: build_aarch64
 
 # 보드는 한 대뿐이다. 두 실행이 겹치면 VTA 가 충돌한다.
 # 앞선 실행을 취소하지 않고 기다리게 한다 — VTA 실행 중 취소는 위험하다.
@@ -55,9 +55,11 @@ jobs:
 
     env:
       BOARD_SRC: /home/xilinx/nest-compiler-2024
-      # generic 은 CPU 폴백이 순수 C 라 느리다. aarch64 는 NEON 과 ARM Compute
-      # Library 를 쓴다. ResNet-50 에서 1989ms 대 487ms (4.08배) 차이가 났다.
-      BOARD_BUILD: /home/xilinx/nest-compiler-2024/${{ inputs.board_build || 'build_board' }}
+      # 기본은 aarch64 다. generic 은 CPU 폴백이 순수 C 라 느리다.
+      # ResNet-18 실측: generic 1475ms 대 aarch64 91.6ms — 16배 차이다.
+      # 게다가 aarch64 쪽 확신도(0.478113)가 ETRI 배포본과 정확히 일치한다.
+      # 즉 aarch64 가 상류의 기준 구성이고 generic 이 곁길이었다.
+      BOARD_BUILD: /home/xilinx/nest-compiler-2024/${{ inputs.board_build || 'build_aarch64' }}
       # 컴파일러를 빌드한 것과 같은 이미지여야 한다.
       # 라이브러리 버전이 다르면 실행조차 되지 않는다.
       DOCKER_IMAGE: leejaymin/nestc-ssh:latest
