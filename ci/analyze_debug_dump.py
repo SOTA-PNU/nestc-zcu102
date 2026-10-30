@@ -96,7 +96,13 @@ def main():
     if not files:
         print("덤프 .bin 을 찾지 못했다: %s" % d, file=sys.stderr)
         return 1
-    files.sort(key=lambda f: os.path.getmtime(f))
+    # 주입된 덤프는 dump_<순번>_<이름>.bin 이라 이름순이 곧 실행 순서다.
+    # 그렇지 않으면 쓰여진 시각으로 정렬한다.
+    import re as _re
+    if all(_re.match(r"dump_\d+_", os.path.basename(f)) for f in files):
+        files.sort(key=lambda f: int(os.path.basename(f).split("_")[1]))
+    else:
+        files.sort(key=lambda f: os.path.getmtime(f))
 
     print("%-44s %9s %5s %5s %8s %6s %6s %6s  %s" %
           ("파일(실행 순서)", "원소", "최소", "최대", "평균", "0%", "음수%", "포화%", "소견"))

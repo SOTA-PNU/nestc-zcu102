@@ -109,15 +109,6 @@ echo "   calib.yaml $(wc -l < "$OUT/calib.yaml") 줄"
 # ── 2단계 번들 생성 ───────────────────────────────────────────────────
 # 양자화 스케일이 이 시점에 코드로 박힌다. 실행 시점에 바꿀 수 없다.
 echo "== 2단계 번들 생성"
-# INSTRUMENT_DEBUG=1 이면 층마다 중간 텐서를 파일로 떨구는 코드를 넣는다.
-# 보드 결과가 틀릴 때 어느 층에서 갈라지는지 찾는 용도다. 느리고 파일이
-# 많이 생기므로 평소에는 끈다. 상류 CMakeLists 에도 주석으로만 남아 있다.
-DBG=()
-if [ "${INSTRUMENT_DEBUG:-0}" = "1" ]; then
-  DBG=(-instrument-debug -instrument-debug-format=rawbin)
-  echo "   (디버그 계측 켬 — 층마다 .bin 을 떨군다)"
-fi
-
 "$MC" -g \
   -model="$ONNX" \
   -backend=VTA \
@@ -125,8 +116,7 @@ fi
   -bundle-api=dynamic \
   -model-input="$INPUT_NAME,float,$INPUT_SHAPE" \
   -load-profile="$OUT/calib.yaml" \
-  -quantization-schema=symmetric_with_power2_scale \
-  "${DBG[@]}"
+  -quantization-schema=symmetric_with_power2_scale
 
 NET=$(ls "$OUT"/*.cpp 2>/dev/null | grep -v '/Main\.cpp$' | head -1)
 [ -n "$NET" ] || { echo "번들 소스를 찾지 못했다" >&2; exit 1; }
@@ -165,6 +155,16 @@ if [ "${MULTI_EVTA:-0}" = "1" ]; then
     echo "   코어 $i  ${BASE}_${i}.cpp  (마스크 $mask)"
     i=$((i+1))
   done
+fi
+
+# INSTRUMENT_DEBUG=1 이면 생성된 번들 소스에 층별 덤프 호출을 끼워 넣는다.
+# 상류의 -instrument-debug 는 LLVM 백엔드 전용이라 VTA 경로에서는 아무 명령도
+# 삽입되지 않는다(2026-10-30 확인 — 파일이 하나도 생기지 않았다). 그래서
+# 컴파일러 대신 생성된 C++ 소스를 후처리한다.
+if [ "${INSTRUMENT_DEBUG:-0}" = "1" ]; then
+  INJ="$(cd "$(dirname "$0")/.." && pwd)/ci/inject_layer_dump.py"
+  [ -f "$INJ" ] || { echo "inject_layer_dump.py 를 찾지 못했다: $INJ" >&2; exit 1; }
+  python3 "$INJ" "$OUT"
 fi
 
 # ── Main.cpp ──────────────────────────────────────────────────────────
