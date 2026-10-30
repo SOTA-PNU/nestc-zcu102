@@ -110,7 +110,8 @@ for pair in ${EXPECT:-}; do
   got=$(echo "$out"  | sed -n 's/^Result: *//p'     | head -1)
   if [ -z "$got" ]; then
     echo "   FAIL $img  Result 줄이 없다"
-    echo "$out" | tail -5
+    # 원인 줄(Check failed, terminate called 등)이 잘리지 않게 넉넉히 남긴다.
+    echo "$out" | tail -25
     FAIL=1
     continue
   fi

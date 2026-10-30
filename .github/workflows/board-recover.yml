@@ -1,0 +1,89 @@
+name: board-recover
+
+# 보드가 이상할 때 쓰는 복구 도구. 수동 실행 전용이다.
+#
+# GitHub 클라우드 러너에서 돈다 — 연구실 PC 가 꺼져 있어도 쓸 수 있어야
+# 하기 때문이다.
+#
+# 쓰는 때
+#   VTA 실행이 "Check failed: fpga_buff_ != nullptr" 로 죽기 시작했다.
+#   추론이 비정상 종료된 뒤(워크플로 취소, Ctrl+C, 멀티코어 CMA 실패)
+#   FPGA 연속 메모리나 xlnk 가 정리되지 않으면 이후 모든 실행이 막힌다.
+#
+# 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "check=점검만, kill=남은 프로세스 정리, reboot=재부팅"
+        type: choice
+        options: [check, kill, reboot]
+        default: check
+
+# 복구 중에 다른 작업이 보드를 건드리지 않게 한다.
+concurrency:
+  group: zcu102-board
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: SSH 준비
+        run: |
+          set -eu
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOARD_SSH_KEY }}" > ~/.ssh/board_key
+          chmod 600 ~/.ssh/board_key
+          cat > ~/.ssh/config <<EOF
+          Host board
+            HostName ${{ secrets.BOARD_HOST }}
+            Port ${{ secrets.BOARD_PORT }}
+            User ${{ secrets.BOARD_USER }}
+            IdentityFile ~/.ssh/board_key
+            ConnectTimeout 10
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: 점검
+        run: |
+          set -eu
+          echo "=== 가동 시간 ==="   ; ssh board 'uptime'
+          echo "=== 메모리/CMA ==="  ; ssh board 'free -h | head -2; grep -i cma /proc/meminfo || echo "(CMA 항목 없음)"'
+          echo "=== xlnk ==="        ; ssh board 'ls -l /dev/xlnk; ls /sys/class/xlnk/xlnk/ 2>/dev/null || true'
+          echo "=== 남은 프로세스 ===" ; ssh board "pgrep -a 'resnet|squeezenet|vta|multi' || echo '없음'"
+          echo "=== 최근 커널 메시지 ===" ; ssh board 'dmesg | tail -20' || true
+
+      - name: 남은 프로세스 정리
+        if: inputs.action == 'kill' || inputs.action == 'reboot'
+        run: |
+          set -eu
+          ssh board "sudo pkill -f 'resnet|squeezenet|multi' || true; sleep 2; pgrep -a 'resnet|squeezenet|vta|multi' || echo '정리됨'"
+
+      # 재부팅은 마지막 수단이다. 돌아오지 않으면 연구실에서 직접 전원을
+      # 내렸다 올려야 하므로, 사람이 명시적으로 고른 경우에만 한다.
+      - name: 재부팅
+        if: inputs.action == 'reboot'
+        run: |
+          set -eu
+          echo "재부팅한다. 돌아오는 데 보통 1~2분."
+          ssh board 'sudo nohup sh -c "sleep 2; reboot" >/dev/null 2>&1 &' || true
+          sleep 45
+          for i in $(seq 1 20); do
+            if ssh -o ConnectTimeout=8 board 'uptime; ls -l /dev/xlnk' 2>/dev/null; then
+              echo "돌아왔다 (시도 $i)"
+              exit 0
+            fi
+            echo "대기 중... ($i/20)"
+            sleep 15
+          done
+          echo "5분 안에 돌아오지 않았다. 연구실에서 전원을 확인해야 한다." >&2
+          exit 1
+
+      - name: 키 정리
+        if: always()
+        run: rm -f ~/.ssh/board_key
