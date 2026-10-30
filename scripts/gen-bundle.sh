@@ -118,6 +118,42 @@ echo "== 2단계 번들 생성"
   -load-profile="$OUT/calib.yaml" \
   -quantization-schema=symmetric_with_power2_scale
 
+NET=$(ls "$OUT"/*.cpp 2>/dev/null | grep -v '/Main\.cpp$' | head -1)
+[ -n "$NET" ] || { echo "번들 소스를 찾지 못했다" >&2; exit 1; }
+BASE=$(basename "$NET" .cpp)
+
+# ── 2-b 단계 멀티 EVTA 번들 ───────────────────────────────────────────
+# 비트스트림은 EVTA 코어 네 개(VTA_DEVICE_NUM=4)를 담고 있는데 번들 하나는
+# 코어 하나에 묶인다. 네 코어를 쓰려면 같은 모델을 네 번 컴파일해 각각 다른
+# 코어에 할당하고, 네 스레드가 동시에 각자 한 장씩 처리한다.
+# 한 장의 지연시간은 그대로이고 처리량이 늘어나는 구조다.
+#
+#   -index-multi-evta  코어 비트마스크. 1=코어0, 2=코어1, 4=코어2, 8=코어3
+#   -network-name      생성되는 파일·심볼의 접두사
+#   -main-entry-name   진입 함수 이름
+#
+# 보정 프로파일은 1단계의 것을 그대로 쓴다. 같은 모델이므로 같은 스케일이다.
+if [ "${MULTI_EVTA:-0}" = "1" ]; then
+  echo "== 2-b단계 멀티 EVTA 번들 (코어 1~3)"
+  i=1
+  for mask in 2 4 8; do
+    "$MC" -g \
+      -model="$ONNX" \
+      -backend=VTA \
+      -emit-bundle="$OUT" \
+      -bundle-api=dynamic \
+      -model-input="$INPUT_NAME,float,$INPUT_SHAPE" \
+      -load-profile="$OUT/calib.yaml" \
+      -quantization-schema=symmetric_with_power2_scale \
+      -index-multi-evta="$mask" \
+      -network-name="${BASE}_${i}" \
+      -main-entry-name="${BASE}_${i}"
+    [ -f "$OUT/${BASE}_${i}.cpp" ] || { echo "코어 $i 번들 생성 실패" >&2; exit 1; }
+    echo "   코어 $i  ${BASE}_${i}.cpp  (마스크 $mask)"
+    i=$((i+1))
+  done
+fi
+
 # ── Main.cpp ──────────────────────────────────────────────────────────
 # 상류는 번들마다 전용 main 을 두지만, 실제로 모델에 종속된 식별자는
 # 접두사 하나에서 파생되는 여섯 군데뿐이다.
@@ -128,9 +164,6 @@ echo "== 2단계 번들 생성"
 #
 # 접두사에서 파생되지 않는 것이 하나 있다 — 출력 텐서 이름이다.
 # conf 의 OUTPUT_NAME 으로 받는다.
-NET=$(ls "$OUT"/*.cpp 2>/dev/null | grep -v '/Main\.cpp$' | head -1)
-[ -n "$NET" ] || { echo "번들 소스를 찾지 못했다" >&2; exit 1; }
-BASE=$(basename "$NET" .cpp)
 
 if [ "$MAIN" != "__template__" ]; then
   # conf 가 전용 main 을 지정했다. 그대로 쓴다.
@@ -152,6 +185,7 @@ else
   MAIN_PY_BASE="$BASE" MAIN_PY_OUT="$OUTPUT_NAME" \
   MAIN_PY_RANGE="$RANGE_MAX" MAIN_PY_ORDER="${CHANNEL_ORDER:-BGR}" \
   MAIN_PY_NORM="$USE_IMAGENET_NORMALIZATION" \
+  MAIN_PY_EXPECT="${MULTI_EXPECT:-}" \
   python3 - "$TMPL" "$OUT/Main.cpp" <<'PYEOF'
 import os, sys
 src, dst = sys.argv[1], sys.argv[2]
@@ -164,6 +198,12 @@ norm  = os.environ["MAIN_PY_NORM"] == "1"
 t = open(src, encoding="utf-8").read()
 t = t.replace("mxnet_exported_resnet18", base)
 t = t.replace("resnetv10_dense0_fwd__1", out)
+
+# 멀티 EVTA 틀은 기대 라벨 281 이 네 군데 박혀 있다. conf 값으로 바꾼다.
+exp = os.environ.get("MAIN_PY_EXPECT", "")
+if exp and "!= 281" in t:
+    t = t.replace("!= 281", "!= " + exp)
+    t = t.replace("should be 281", "should be " + exp)
 
 # 1) 픽셀 범위
 old = "std::pair<float, float> range = std::make_pair(0., 255.0);"
