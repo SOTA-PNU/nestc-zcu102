@@ -1,0 +1,11 @@
+전부 이미 패치되어 있다.
+경고: 기준 구현과 다름, 건너뜀 — vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+--- VTABundle 빌드 ---
+[100%] Built target vta_runtime
+[100%] Built target VTABundle
+--- 라이브러리 ---
+-rw-rw-r-- 1 xilinx xilinx 123040 Oct 30 07:33 vta/vtalib/libVTABundle.a
+--- 소스에 패치 표식 ---
+1
+--- 라이브러리에 패치 표식 (0 이면 재빌드 안 된 것) ---
+0
