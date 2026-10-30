@@ -217,6 +217,29 @@ DISPATCH_NEW = """    /* %s */
     }""" % MARKER
 
 
+
+# ── 5. VTAInterpreter 명령 디스패치의 TouchInst ───────────────────────
+# VTAInterpreter 는 노드 구현(VTAInterpreterNodes.cpp)에는 Touch 가 있는데
+# 명령 디스패치에는 분기가 없어, Concat 이 있는 모델이 시작하자마자
+# "Invalid instruction: ... = touch" 로 죽는다. 번들 경로와 같은 처리를 넣는다.
+VTAI_PATH = "lib/Backends/VTAInterpreter/VTAInterpreterFunction.cpp"
+VTAI_ANCHOR = "      default:\n"
+VTAI_ADD = "      case Kinded::Kind::TouchInstKind:\n        break;\n\n"
+
+
+def patch_vtainterpreter(path):
+    """이 파일은 MARKER 를 쓰지 않는다. 분기가 이미 있으면 건너뛴다."""
+    try:
+        src = open(path, encoding="utf-8").read()
+    except OSError as e:
+        return None, "열 수 없음: %s" % e
+    if "TouchInstKind" in src:
+        return None, "이미 패치됨"
+    if src.count(VTAI_ANCHOR) != 1:
+        return None, "기준점이 하나가 아님: default:"
+    return src.replace(VTAI_ANCHOR, VTAI_ADD + VTAI_ANCHOR, 1), None
+
+
 def patch(path, pieces):
     """pieces: [(기준문자열, 넣을내용, 앞에넣을지)] 또는 [(옛것, 새것, None)]"""
     try:
@@ -263,6 +286,18 @@ def main():
     # 먼저 전부 검사한다. 하나라도 실패하면 아무것도 바꾸지 않는다.
     planned = []
     skipped = []
+
+    vtai = os.path.join(root, VTAI_PATH)
+    if os.path.exists(vtai):
+        out, err = patch_vtainterpreter(vtai)
+        if err == "이미 패치됨":
+            skipped.append(vtai)
+        elif err:
+            print("실패 %s\n  %s" % (vtai, err), file=sys.stderr)
+            print("아무것도 바꾸지 않았다.", file=sys.stderr)
+            return 1
+        else:
+            planned.append((vtai, out))
     for path, pieces in targets:
         out, err = patch(path, pieces)
         if err == "이미 패치됨":
