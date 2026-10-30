@@ -1,53 +1,91 @@
-== 모델 resnet18
+== 모델 resnet18-multi
    ONNX   /src/build/models/mxnet_exported_resnet18.onnx
    이미지 1장
-   출력   /work/bundle-out/resnet18
+   출력   /work/multi-out/resnet18
 == 1단계 보정 프로파일
 Model: /src/build/models
 Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 07:37:04.080750    24 HostManager.cpp:242] Destroying host manager...
+I1030 07:53:58.439893    24 HostManager.cpp:242] Destroying host manager...
+== 2-b단계 멀티 EVTA 번들 (코어 1~3)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1030 07:53:58.944181    32 HostManager.cpp:242] Destroying host manager...
+   코어 1  mxnet_exported_resnet18_1.cpp  (마스크 2)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1030 07:53:59.431654    35 HostManager.cpp:242] Destroying host manager...
+   코어 2  mxnet_exported_resnet18_2.cpp  (마스크 4)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1030 07:53:59.929512    38 HostManager.cpp:242] Destroying host manager...
+   코어 3  mxnet_exported_resnet18_3.cpp  (마스크 8)
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 BGR, 정규화 0
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "resnetv10_dense0_fwd__1"
 == 완료
-total 11828
-drwxr-xr-x 2 1000 1000     4096 Oct 30 07:37 .
-drwxr-xr-x 3 1000 1000     4096 Oct 30 07:37 ..
--rw-r--r-- 1 1000 1000    16320 Oct 30 07:37 Main.cpp
--rw-r--r-- 1 1000 1000     3762 Oct 30 07:37 VTARuntime.h
--rw-r--r-- 1 1000 1000       67 Oct 30 07:37 bundle.conf
--rw-r--r-- 1 1000 1000    26235 Oct 30 07:37 calib.yaml
--rw-r--r-- 1 1000 1000    40427 Oct 30 07:37 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1000 1000     2190 Oct 30 07:37 mxnet_exported_resnet18.h
--rw-r--r-- 1 1000 1000 12003168 Oct 30 07:37 mxnet_exported_resnet18.weights.bin
-== 번들 resnet18  소스 mxnet_exported_resnet18.cpp
-   VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
-   vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
-   ACL         3개
-   (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dlpack/include
-   (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dmlc-core/include
-== 컴파일
+total 47140
+drwxr-xr-x 2 1000 1000     4096 Oct 30 07:53 .
+drwxr-xr-x 3 1000 1000     4096 Oct 30 07:53 ..
+-rw-r--r-- 1 1000 1000    23416 Oct 30 07:53 Main.cpp
+-rw-r--r-- 1 1000 1000     3762 Oct 30 07:53 VTARuntime.h
+-rw-r--r-- 1 1000 1000       36 Oct 30 07:53 bundle.conf
+-rw-r--r-- 1 1000 1000    26235 Oct 30 07:53 calib.yaml
+-rw-r--r-- 1 1000 1000    40427 Oct 30 07:53 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1000 1000     2190 Oct 30 07:53 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 07:53 mxnet_exported_resnet18.weights.bin
+-rw-r--r-- 1 1000 1000    40465 Oct 30 07:53 mxnet_exported_resnet18_1.cpp
+-rw-r--r-- 1 1000 1000     2206 Oct 30 07:53 mxnet_exported_resnet18_1.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 07:53 mxnet_exported_resnet18_1.weights.bin
+-rw-r--r-- 1 1000 1000    40465 Oct 30 07:53 mxnet_exported_resnet18_2.cpp
+-rw-r--r-- 1 1000 1000     2206 Oct 30 07:53 mxnet_exported_resnet18_2.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 07:53 mxnet_exported_resnet18_2.weights.bin
+-rw-r--r-- 1 1000 1000    40465 Oct 30 07:53 mxnet_exported_resnet18_3.cpp
+-rw-r--r-- 1 1000 1000     2206 Oct 30 07:53 mxnet_exported_resnet18_3.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 07:53 mxnet_exported_resnet18_3.weights.bin
+== 멀티 EVTA 번들 resnet18-multi
+   mxnet_exported_resnet18_1.cpp
+   mxnet_exported_resnet18_2.cpp
+   mxnet_exported_resnet18_3.cpp
+   mxnet_exported_resnet18.cpp
+== 컴파일 (번들 네 벌이라 단일보다 오래 걸린다)
+Main.cpp: In function ‘void* thread_main(void*)’:
+Main.cpp:484:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘void* thread_main1(void*)’:
+Main.cpp:528:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘void* thread_main2(void*)’:
+Main.cpp:571:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘void* thread_main3(void*)’:
+Main.cpp:613:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
 Main.cpp: In function ‘int main(int, char**)’:
-Main.cpp:455:79: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-       (uint8_t *) initMutableWeightVars(mxnet_exported_resnet18_config, "data");
-                                                                               ^
-Main.cpp:484:128: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-   int maxIdx = dumpInferenceResults(mxnet_exported_resnet18_config, (uint8_t*) mutableWeightVarsAddr, "resnetv10_dense0_fwd__1");
-                                                                                                                                ^
-Main.cpp: At global scope:
-Main.cpp:439:15: warning: ‘float* getInferenceResultVar(const BundleConfig&, uint8_t*, const char*)’ defined but not used [-Wunused-function]
- static float* getInferenceResultVar(const BundleConfig &config,
-               ^~~~~~~~~~~~~~~~~~~~~
-Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&, const char*, float*)’ defined but not used [-Wunused-function]
- static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT) {
-                 ^~~~~~~~~~~~~~~~~~~~~
+Main.cpp:644:78: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_config, "data");
+                                                                              ^
+Main.cpp:656:80: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_1_config, "data");
+                                                                                ^
+Main.cpp:668:80: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_2_config, "data");
+                                                                                ^
+Main.cpp:680:80: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_3_config, "data");
+                                                                                ^
 == 링크
-== 실행
-   OK   cat_285  281  (0.533373, 1477.82ms)
-   OK   dog_207  207  (0.980803, 1478.75ms)
-   OK   zebra_340  340  (0.963957, 1480.78ms)
-== 전부 통과
+== 실행 (네 코어 동시)
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [07:54:21] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./resnet18-multi_multi(+0x2bdfc) [0x5561c31dfc]
+  [bt] (1) ./resnet18-multi_multi(+0x2c974) [0x5561c32974]
+  [bt] (2) ./resnet18-multi_multi(+0x29c4c) [0x5561c2fc4c]
+  [bt] (3) ./resnet18-multi_multi(+0xcd28) [0x5561c12d28]
+  [bt] (4) /lib/aarch64-linux-gnu/libpthread.so.0(+0x7088) [0x7f851aa088]
+== 실패  시간 줄을 찾지 못했다
