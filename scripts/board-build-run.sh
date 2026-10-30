@@ -79,6 +79,33 @@ done
 
 CXXFLAGS=(-Wall -Wno-psabi -O3 -DNDEBUG -march=native -std=c++14)
 
+
+# ── CMA 여유 확인 ─────────────────────────────────────────────────────
+# FPGA 는 연속 물리 메모리(CMA)를 쓴다. 추론이 비정상 종료되면 드라이버가
+# 반납하지 못하고 남는데, 그 상태로 실행하면 스택 트레이스만 남고 원인이
+# 보이지 않는다. 먼저 재고 모자라면 분명하게 멈춘다.
+cma_free_kb() {
+  grep -i '^CmaFree' /proc/meminfo 2>/dev/null | awk '{print $2}' | head -1
+}
+require_cma() {  # $1 = 필요한 kB, $2 = 설명
+  local need=$1 what=$2 free
+  free=$(cma_free_kb)
+  if [ -z "$free" ]; then
+    echo "   (경고) CmaFree 를 읽지 못했다. 그냥 진행한다."
+    return 0
+  fi
+  echo "   CMA 여유 ${free} kB (필요 추정 ${need} kB, $what)"
+  if [ "$free" -lt "$need" ]; then
+    echo ""
+    echo "== 중단  CMA 가 모자란다"
+    echo "   추론이 비정상 종료되면 FPGA 메모리가 반납되지 않는다."
+    echo "   GitHub Actions 의 board-recover 워크플로를 reboot 로 돌린 뒤 다시 시도한다."
+    exit 1
+  fi
+}
+
+require_cma 40000 "단일 코어"
+
 echo "== 컴파일"
 cd "$BUNDLE"
 c++ "${CXXFLAGS[@]}" "${INC[@]}" -c Main.cpp -o main.o
