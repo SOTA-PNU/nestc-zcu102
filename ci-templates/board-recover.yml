@@ -29,6 +29,10 @@ on:
         default: check
 
 # 복구 중에 다른 작업이 보드를 건드리지 않게 한다.
+# 결과 요약을 저장소에 다시 커밋하기 위해 필요하다.
+permissions:
+  contents: write
+
 concurrency:
   group: zcu102-board
   cancel-in-progress: false
@@ -39,6 +43,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: SSH 준비
         run: |
           set -eu
@@ -59,11 +67,13 @@ jobs:
       - name: 점검
         run: |
           set -eu
-          echo "=== 가동 시간 ==="   ; ssh board 'uptime'
-          echo "=== 메모리/CMA ==="  ; ssh board 'free -h | head -2; grep -i cma /proc/meminfo || echo "(CMA 항목 없음)"'
-          echo "=== xlnk ==="        ; ssh board 'ls -l /dev/xlnk; ls /sys/class/xlnk/xlnk/ 2>/dev/null || true'
-          echo "=== 남은 프로세스 ===" ; ssh board "pgrep -a 'resnet|squeezenet|vta|multi' || echo '없음'"
-          echo "=== 최근 커널 메시지 ===" ; ssh board 'dmesg | tail -20' || true
+          mkdir -p logs
+          {
+            echo "=== 가동 시간 ==="   ; ssh board 'uptime'
+            echo "=== 메모리/CMA ==="  ; ssh board 'free -h | head -2; grep -i cma /proc/meminfo || echo "(CMA 항목 없음)"'
+            echo "=== xlnk ==="        ; ssh board 'ls -l /dev/xlnk'
+            echo "=== 남은 프로세스 ===" ; ssh board "pgrep -a 'resnet|squeezenet|vta|multi' || echo '없음'"
+          } 2>&1 | tee logs/recover-before.txt
 
       - name: 남은 프로세스 정리
         if: inputs.action == 'kill' || inputs.action == 'reboot'
@@ -81,8 +91,10 @@ jobs:
           ssh board 'sudo nohup sh -c "sleep 2; reboot" >/dev/null 2>&1 &' || true
           sleep 45
           for i in $(seq 1 20); do
-            if ssh -o ConnectTimeout=8 board 'uptime; ls -l /dev/xlnk' 2>/dev/null; then
+            if ssh -o ConnectTimeout=8 board 'uptime' >/dev/null 2>&1; then
               echo "돌아왔다 (시도 $i)"
+              ssh board 'uptime; ls -l /dev/xlnk; grep -i cma /proc/meminfo' \
+                2>&1 | tee logs/recover-after.txt
               exit 0
             fi
             echo "대기 중... ($i/20)"
@@ -90,6 +102,38 @@ jobs:
           done
           echo "5분 안에 돌아오지 않았다. 연구실에서 전원을 확인해야 한다." >&2
           exit 1
+
+      # 결과를 저장소에 남긴다. 그래야 Actions 화면을 열지 않고도
+      # 보드 상태를 확인할 수 있다.
+      - name: 결과를 저장소에 기록
+        if: always()
+        run: |
+          set -eu
+          mkdir -p results
+          {
+            echo "# board-recover 결과"
+            echo ""
+            echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "- 동작: ${{ inputs.action }}"
+            echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ""
+            echo "## 실행 전"
+            echo '```'
+            cat logs/recover-before.txt 2>/dev/null || echo "(없음 — 연결 실패)"
+            echo '```'
+            echo ""
+            echo "## 재부팅 후"
+            echo '```'
+            cat logs/recover-after.txt 2>/dev/null || echo "(재부팅하지 않았거나 돌아오지 않았다)"
+            echo '```'
+          } > results/board-recover.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/
+          git diff --cached --quiet && { echo "변화 없음"; exit 0; }
+          git commit -m "결과: board-recover ${{ inputs.action }} ${GITHUB_RUN_ID} [skip ci]"
+          git pull --rebase --autostash origin main || true
+          git push origin HEAD:main
 
       - name: 키 정리
         if: always()
