@@ -1,0 +1,70 @@
+name: board-health
+
+# 보드가 살아 있는지 주기적으로 확인한다.
+#
+# 사람이 SSH 에 앉아 있지 않아도 되게 하려는 것이다. 실패하면 GitHub 이
+# 메일로 알려주므로, "죽은 것 같다" 싶을 때 터미널을 여는 대신 여기를 보면 된다.
+#
+# 러너는 PC(WSL x64)에 있고 보드로 SSH 를 보낸다.
+# 보드 자체는 아무것도 실행하지 않는다 — VTA 를 건드리지 않는 가벼운 점검이다.
+#
+# 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
+
+on:
+  schedule:
+    - cron: "17 */2 * * *"   # 2시간마다 (매시 17분, 분을 비켜 두어 혼잡 시간 회피)
+  workflow_dispatch:
+
+# board-test / model-test 와 같은 그룹에 둔다.
+# 추론이 도는 중에 점검이 끼어들지 않게 하기 위함이다.
+concurrency:
+  group: zcu102-board
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+
+    steps:
+      - name: SSH 준비
+        run: |
+          set -eu
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOARD_SSH_KEY }}" > ~/.ssh/health_key
+          chmod 600 ~/.ssh/health_key
+
+      - name: 보드 점검
+        id: check
+        run: |
+          set -eu
+          OPTS="-i $HOME/.ssh/health_key -p ${{ secrets.BOARD_PORT }}
+                -o BatchMode=yes -o ConnectTimeout=10
+                -o StrictHostKeyChecking=accept-new"
+          TARGET="${{ secrets.BOARD_USER }}@${{ secrets.BOARD_HOST }}"
+
+          echo "=== 가동 시간 ==="
+          ssh $OPTS "$TARGET" 'uptime'
+
+          echo "=== VTA 디바이스 ==="
+          # /dev/xlnk 가 없으면 드라이버가 올라오지 않은 것이다.
+          ssh $OPTS "$TARGET" 'ls -l /dev/xlnk'
+
+          echo "=== 메모리 ==="
+          ssh $OPTS "$TARGET" 'free -h | head -2'
+
+          echo "=== 디스크 ==="
+          ssh $OPTS "$TARGET" 'df -h / | tail -1'
+
+          echo "=== 남아 있는 VTA 프로세스 ==="
+          # 추론이 비정상 종료되면 프로세스가 남아 FPGA 를 붙잡고 있을 수 있다.
+          ssh $OPTS "$TARGET" "pgrep -a 'resnet|squeezenet|vta' || echo '없음'"
+
+          echo "=== 디스크 여유 판정 ==="
+          USE=$(ssh $OPTS "$TARGET" "df / | tail -1 | awk '{print \$5}' | tr -d '%'")
+          echo "사용률 ${USE}%"
+          [ "$USE" -lt 90 ] || { echo "디스크 90% 초과"; exit 1; }
+
+      - name: 키 정리
+        if: always()
+        run: rm -f ~/.ssh/health_key
