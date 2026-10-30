@@ -68,7 +68,7 @@ jobs:
 
           echo "=== 남아 있는 VTA 프로세스 ==="
           # 추론이 비정상 종료되면 프로세스가 남아 FPGA 를 붙잡고 있을 수 있다.
-          ssh $OPTS "$TARGET" "pgrep -a 'resnet|squeezenet|vta' || echo '없음'"
+          ssh $OPTS "$TARGET" "pgrep -a 'r[e]snet|s[q]ueezenet|v[t]a' || echo '없음'"
 
           echo "=== 디스크 여유 판정 ==="
           USE=$(ssh $OPTS "$TARGET" "df / | tail -1 | awk '{print \$5}' | tr -d '%'")
