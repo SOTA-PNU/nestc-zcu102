@@ -32,6 +32,11 @@ on:
         description: "한 모델만 돌릴 때 이름 (비우면 models/ 전부)"
         type: string
         default: ""
+      board_build:
+        description: "보드 빌드 디렉터리. generic=build_board, NEON+ACL=build_aarch64"
+        type: choice
+        options: [build_board, build_aarch64]
+        default: build_board
 
 # 보드는 한 대뿐이다. 두 실행이 겹치면 VTA 가 충돌한다.
 # 앞선 실행을 취소하지 않고 기다리게 한다 — VTA 실행 중 취소는 위험하다.
@@ -50,7 +55,9 @@ jobs:
 
     env:
       BOARD_SRC: /home/xilinx/nest-compiler-2024
-      BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_board
+      # generic 은 CPU 폴백이 순수 C 라 느리다. aarch64 는 NEON 과 ARM Compute
+      # Library 를 쓴다. ResNet-50 에서 1989ms 대 487ms (4.08배) 차이가 났다.
+      BOARD_BUILD: /home/xilinx/nest-compiler-2024/${{ inputs.board_build || 'build_board' }}
       # 컴파일러를 빌드한 것과 같은 이미지여야 한다.
       # 라이브러리 버전이 다르면 실행조차 되지 않는다.
       DOCKER_IMAGE: leejaymin/nestc-ssh:latest
@@ -138,7 +145,7 @@ jobs:
           scp ci/patch_relu_rescale.py board:/home/xilinx/
           ssh board "set -euo pipefail
             python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
-            cd /home/xilinx/nest-compiler-2024/build_board
+            cd $BOARD_BUILD
             echo '--- VTABundle 빌드 ---'
             make -j1 VTABundle 2>&1 | tail -25
             echo '--- 라이브러리 ---'
@@ -229,6 +236,7 @@ jobs:
             echo "- 커밋: ${GITHUB_SHA:0:8}"
             echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo "- 대상: ${LIST:-(없음)}"
+            echo "- 보드 빌드: $(basename "$BOARD_BUILD")"
             echo ""
             cat logs/summary.txt 2>/dev/null || echo "(요약 없음 — 실행 전에 멈췄다)"
           } > results/latest.md
