@@ -125,6 +125,20 @@ jobs:
             -w /root/nestc/build "$DOCKER_IMAGE" \
             ninja model-compiler image-classifier
 
+      # 보드 쪽 런타임(vtalib)에 우리 패치를 적용한다.
+      #   patch_relu_rescale.py  독립 ReLU 재양자화의 int8 포화 복원
+      # 컴파일러 패치와 달리 이쪽은 보드에서 빌드해야 한다. make 는 증분이라
+      # 바뀐 것이 없으면 금방 끝난다.
+      - name: 보드 런타임 패치 적용 및 재빌드
+        run: |
+          set -eu
+          scp ci/patch_relu_rescale.py board:/home/xilinx/
+          ssh board "set -eu
+            python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
+            cd /home/xilinx/nest-compiler-2024/build_board
+            make -j1 VTABundle 2>&1 | tail -15
+            nm -C vta/vtalib/libVTABundle.a | grep -c 'T relu' || true"
+
       # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
       # 재부팅 전까지 사용 불가 상태가 될 수 있다.
       - name: 모델별 번들 생성과 보드 실행
@@ -208,6 +222,12 @@ jobs:
             cat logs/summary.txt 2>/dev/null || echo "(요약 없음 — 실행 전에 멈췄다)"
           } > results/latest.md
           cp logs/*.log results/ 2>/dev/null || true
+          # 생성된 번들 소스를 남긴다. 타일 인자, insert_tensor 호출, relu 스케일을
+          # 보려고 매번 보드에 들어가는 일을 없애기 위함이다.
+          for m in ${LIST:-}; do
+            f=$(ls "bundle-out/$m"/*.cpp 2>/dev/null | grep -v '/Main\.cpp$' | head -1) || true
+            [ -n "${f:-}" ] && cp "$f" "results/$m.net.cpp"
+          done
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add results/
