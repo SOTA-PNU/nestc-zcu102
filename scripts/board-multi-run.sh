@@ -35,11 +35,12 @@ BUILD=$(cd "$BUILD" && pwd)
 
 NETS=()
 while IFS= read -r f; do NETS+=("$f"); done < <(ls "$BUNDLE"/*.cpp | grep -v '/Main\.cpp$' | sort)
-[ ${#NETS[@]} -eq 4 ] || {
-  echo "번들 소스가 4개가 아니다 (${#NETS[@]}개). MULTI_EVTA=1 로 생성했는지 확인한다." >&2
+CORES=${#NETS[@]}
+[ "$CORES" -ge 1 ] && [ "$CORES" -le 4 ] || {
+  echo "번들 소스가 1~4개가 아니다 ($CORES개). MULTI_EVTA=1 로 생성했는지 확인한다." >&2
   printf '   %s\n' "${NETS[@]}" >&2
   exit 1; }
-echo "== 멀티 EVTA 번들 $MODEL_NAME"
+echo "== 멀티 EVTA 번들 $MODEL_NAME  (코어 $CORES개)"
 for n in "${NETS[@]}"; do echo "   $(basename "$n")"; done
 
 findone() {

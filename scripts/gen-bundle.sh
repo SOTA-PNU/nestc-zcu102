@@ -109,6 +109,15 @@ echo "   calib.yaml $(wc -l < "$OUT/calib.yaml") 줄"
 # ── 2단계 번들 생성 ───────────────────────────────────────────────────
 # 양자화 스케일이 이 시점에 코드로 박힌다. 실행 시점에 바꿀 수 없다.
 echo "== 2단계 번들 생성"
+# INSTRUMENT_DEBUG=1 이면 층마다 중간 텐서를 파일로 떨구는 코드를 넣는다.
+# 보드 결과가 틀릴 때 어느 층에서 갈라지는지 찾는 용도다. 느리고 파일이
+# 많이 생기므로 평소에는 끈다. 상류 CMakeLists 에도 주석으로만 남아 있다.
+DBG=()
+if [ "${INSTRUMENT_DEBUG:-0}" = "1" ]; then
+  DBG=(-instrument-debug -instrument-debug-format=rawbin)
+  echo "   (디버그 계측 켬 — 층마다 .bin 을 떨군다)"
+fi
+
 "$MC" -g \
   -model="$ONNX" \
   -backend=VTA \
@@ -116,7 +125,8 @@ echo "== 2단계 번들 생성"
   -bundle-api=dynamic \
   -model-input="$INPUT_NAME,float,$INPUT_SHAPE" \
   -load-profile="$OUT/calib.yaml" \
-  -quantization-schema=symmetric_with_power2_scale
+  -quantization-schema=symmetric_with_power2_scale \
+  "${DBG[@]}"
 
 NET=$(ls "$OUT"/*.cpp 2>/dev/null | grep -v '/Main\.cpp$' | head -1)
 [ -n "$NET" ] || { echo "번들 소스를 찾지 못했다" >&2; exit 1; }
@@ -134,9 +144,12 @@ BASE=$(basename "$NET" .cpp)
 #
 # 보정 프로파일은 1단계의 것을 그대로 쓴다. 같은 모델이므로 같은 스케일이다.
 if [ "${MULTI_EVTA:-0}" = "1" ]; then
-  echo "== 2-b단계 멀티 EVTA 번들 (코어 1~3)"
+  CORES=${MULTI_CORES:-4}
+  case "$CORES" in 1|2|3|4) ;; *) echo "MULTI_CORES 는 1..4" >&2; exit 2 ;; esac
+  echo "== 2-b단계 멀티 EVTA 번들 (코어 $CORES개)"
   i=1
   for mask in 2 4 8; do
+    [ "$i" -lt "$CORES" ] || break
     "$MC" -g \
       -model="$ONNX" \
       -backend=VTA \
@@ -247,6 +260,15 @@ fi
 
 # OUTPUT_NAME 을 잘못 적으면 추론은 되는데 결과를 못 읽는다.
 # 번들이 내보내는 심볼 이름을 보여 주어 확인할 수 있게 한다.
+# 멀티 모드에서 코어 수가 4 보다 적으면 틀의 스레드를 줄인다.
+# 버퍼 초기화까지 지워야 한다 — 그것이 FPGA 연속 메모리를 잡는 자리다.
+if [ "${MULTI_EVTA:-0}" = "1" ] && [ "${MULTI_CORES:-4}" != "4" ]; then
+  RED="$(cd "$(dirname "$0")/.." && pwd)/ci/make_multi_main.py"
+  [ -f "$RED" ] || { echo "make_multi_main.py 를 찾지 못했다: $RED" >&2; exit 1; }
+  python3 "$RED" "$OUT/Main.cpp" "$OUT/Main.cpp.tmp" "${MULTI_CORES}"
+  mv "$OUT/Main.cpp.tmp" "$OUT/Main.cpp"
+fi
+
 echo "== 번들이 내보내는 심볼 (OUTPUT_NAME 후보)"
 grep -oE '"[A-Za-z0-9_]+__[0-9]+"' "$NET" | sort -u | head -20 || true
 
