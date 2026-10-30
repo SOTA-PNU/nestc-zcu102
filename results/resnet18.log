@@ -8,29 +8,29 @@ Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 07:25:44.792109    24 HostManager.cpp:242] Destroying host manager...
+I1030 07:33:48.617758    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 BGR, 정규화 0
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "resnetv10_dense0_fwd__1"
 == 완료
 total 11828
-drwxr-xr-x 2 1000 1000     4096 Oct 30 07:25 .
-drwxr-xr-x 3 1000 1000     4096 Oct 30 07:25 ..
--rw-r--r-- 1 1000 1000    16320 Oct 30 07:25 Main.cpp
--rw-r--r-- 1 1000 1000     3762 Oct 30 07:25 VTARuntime.h
--rw-r--r-- 1 1000 1000       67 Oct 30 07:25 bundle.conf
--rw-r--r-- 1 1000 1000    26235 Oct 30 07:25 calib.yaml
--rw-r--r-- 1 1000 1000    40427 Oct 30 07:25 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1000 1000     2190 Oct 30 07:25 mxnet_exported_resnet18.h
--rw-r--r-- 1 1000 1000 12003168 Oct 30 07:25 mxnet_exported_resnet18.weights.bin
+drwxr-xr-x 2 1000 1000     4096 Oct 30 07:33 .
+drwxr-xr-x 3 1000 1000     4096 Oct 30 07:33 ..
+-rw-r--r-- 1 1000 1000    16320 Oct 30 07:33 Main.cpp
+-rw-r--r-- 1 1000 1000     3762 Oct 30 07:33 VTARuntime.h
+-rw-r--r-- 1 1000 1000       67 Oct 30 07:33 bundle.conf
+-rw-r--r-- 1 1000 1000    26235 Oct 30 07:33 calib.yaml
+-rw-r--r-- 1 1000 1000    40427 Oct 30 07:33 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1000 1000     2190 Oct 30 07:33 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 07:33 mxnet_exported_resnet18.weights.bin
 == 번들 resnet18  소스 mxnet_exported_resnet18.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
    ACL         3개
+== 컴파일
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dlpack/include
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dmlc-core/include
-== 컴파일
 Main.cpp: In function ‘int main(int, char**)’:
 Main.cpp:455:79: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
        (uint8_t *) initMutableWeightVars(mxnet_exported_resnet18_config, "data");
@@ -47,7 +47,7 @@ Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
                  ^~~~~~~~~~~~~~~~~~~~~
 == 링크
 == 실행
-   OK   cat_285  281  (0.533373, 1478.44ms)
-   OK   dog_207  207  (0.980803, 1478.84ms)
-   OK   zebra_340  340  (0.963957, 1478.95ms)
+   OK   cat_285  281  (0.533373, 1478.64ms)
+   OK   dog_207  207  (0.980803, 1478.57ms)
+   OK   zebra_340  340  (0.963957, 1479.24ms)
 == 전부 통과

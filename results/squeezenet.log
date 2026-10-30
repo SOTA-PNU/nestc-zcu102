@@ -8,22 +8,22 @@ Running 1 thread(s).
    calib.yaml 1109 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 07:26:07.323841    24 HostManager.cpp:242] Destroying host manager...
+I1030 07:34:10.884991    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 squeezenet, 출력 squeezenet0_flatten0_reshape0__1)
           범위 0~1.0, 채널 RGB, 정규화 1
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "squeezenet0_flatten0_reshape0__1"
 == 완료
 total 1368
-drwxr-xr-x 2 1000 1000    4096 Oct 30 07:26 .
-drwxr-xr-x 4 1000 1000    4096 Oct 30 07:26 ..
--rw-r--r-- 1 1000 1000   16684 Oct 30 07:26 Main.cpp
--rw-r--r-- 1 1000 1000    3762 Oct 30 07:26 VTARuntime.h
--rw-r--r-- 1 1000 1000      69 Oct 30 07:26 bundle.conf
--rw-r--r-- 1 1000 1000   53807 Oct 30 07:26 calib.yaml
--rw-r--r-- 1 1000 1000   52465 Oct 30 07:26 squeezenet.cpp
--rw-r--r-- 1 1000 1000    2095 Oct 30 07:26 squeezenet.h
--rw-r--r-- 1 1000 1000 1247328 Oct 30 07:26 squeezenet.weights.bin
+drwxr-xr-x 2 1000 1000    4096 Oct 30 07:34 .
+drwxr-xr-x 4 1000 1000    4096 Oct 30 07:34 ..
+-rw-r--r-- 1 1000 1000   16684 Oct 30 07:34 Main.cpp
+-rw-r--r-- 1 1000 1000    3762 Oct 30 07:34 VTARuntime.h
+-rw-r--r-- 1 1000 1000      69 Oct 30 07:34 bundle.conf
+-rw-r--r-- 1 1000 1000   53807 Oct 30 07:34 calib.yaml
+-rw-r--r-- 1 1000 1000   52465 Oct 30 07:34 squeezenet.cpp
+-rw-r--r-- 1 1000 1000    2095 Oct 30 07:34 squeezenet.h
+-rw-r--r-- 1 1000 1000 1247328 Oct 30 07:34 squeezenet.weights.bin
 == 번들 squeezenet  소스 squeezenet.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
@@ -47,7 +47,7 @@ Main.cpp:378:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
                  ^~~~~~~~~~~~~~~~~~~~~
 == 링크
 == 실행
-   FAIL cat_285  기대 281  실제 905  (0.058724, 646.117ms)
-   FAIL dog_207  기대 205  실제 904  (0.208223, 646.179ms)
-   FAIL zebra_340  기대 340  실제 533  (0.094922, 648.507ms)
+   FAIL cat_285  기대 281  실제 905  (0.058724, 645.683ms)
+   FAIL dog_207  기대 205  실제 904  (0.208223, 645.159ms)
+   FAIL zebra_340  기대 340  실제 533  (0.094922, 646.086ms)
 == 실패 있음
