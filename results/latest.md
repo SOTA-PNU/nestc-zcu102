@@ -1,8 +1,8 @@
 # model-test 결과
 
-- 시각: 2026-10-30 11:18 UTC
-- 커밋: 45a5d5be
-- 실행: https://github.com/SOTA-PNU/nestc-zcu102/actions/runs/41047066071
+- 시각: 2026-10-30 11:23 UTC
+- 커밋: 696366ad
+- 실행: https://github.com/SOTA-PNU/nestc-zcu102/actions/runs/41047696861
 - 대상: resnet18 squeezenet 
 
 ### resnet18 — 실패

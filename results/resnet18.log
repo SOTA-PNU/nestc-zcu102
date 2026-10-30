@@ -8,22 +8,22 @@ Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 11:18:12.019062    24 HostManager.cpp:242] Destroying host manager...
+I1030 11:23:22.740005    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 BGR, 정규화 0
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "resnetv10_dense0_fwd__1"
 == 완료
 total 11828
-drwxr-xr-x 2 1000 1000     4096 Oct 30 11:18 .
-drwxr-xr-x 3 1000 1000     4096 Oct 30 11:18 ..
--rw-r--r-- 1 1000 1000    16320 Oct 30 11:18 Main.cpp
--rw-r--r-- 1 1000 1000     3762 Oct 30 11:18 VTARuntime.h
--rw-r--r-- 1 1000 1000       67 Oct 30 11:18 bundle.conf
--rw-r--r-- 1 1000 1000    26235 Oct 30 11:18 calib.yaml
--rw-r--r-- 1 1000 1000    40427 Oct 30 11:18 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1000 1000     2190 Oct 30 11:18 mxnet_exported_resnet18.h
--rw-r--r-- 1 1000 1000 12003168 Oct 30 11:18 mxnet_exported_resnet18.weights.bin
+drwxr-xr-x 2 1000 1000     4096 Oct 30 11:23 .
+drwxr-xr-x 3 1000 1000     4096 Oct 30 11:23 ..
+-rw-r--r-- 1 1000 1000    16320 Oct 30 11:23 Main.cpp
+-rw-r--r-- 1 1000 1000     3762 Oct 30 11:23 VTARuntime.h
+-rw-r--r-- 1 1000 1000       67 Oct 30 11:23 bundle.conf
+-rw-r--r-- 1 1000 1000    26235 Oct 30 11:23 calib.yaml
+-rw-r--r-- 1 1000 1000    40427 Oct 30 11:23 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1000 1000     2190 Oct 30 11:23 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 11:23 mxnet_exported_resnet18.weights.bin
 == 번들 resnet18  소스 mxnet_exported_resnet18.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
@@ -48,21 +48,36 @@ Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
 == 링크
 == 실행
    FAIL cat_285  Result 줄이 없다
-  [bt] (2) ./resnet18(+0x221ac) [0x55873201ac]
-  [bt] (3) ./resnet18(+0xc178) [0x558730a178]
-  [bt] (4) ./resnet18(+0xab34) [0x5587308b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f8209e6e0]
-  [bt] (6) ./resnet18(+0xc098) [0x558730a098]
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [11:23:33] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./resnet18(+0x2435c) [0x5581d9f35c]
+  [bt] (1) ./resnet18(+0x24e54) [0x5581d9fe54]
+  [bt] (2) ./resnet18(+0x221ac) [0x5581d9d1ac]
+  [bt] (3) ./resnet18(+0xc178) [0x5581d87178]
+  [bt] (4) ./resnet18(+0xab34) [0x5581d85b34]
+  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f9eb5e6e0]
+  [bt] (6) ./resnet18(+0xc098) [0x5581d87098]
    FAIL dog_207  Result 줄이 없다
-  [bt] (2) ./resnet18(+0x221ac) [0x555cf691ac]
-  [bt] (3) ./resnet18(+0xc178) [0x555cf53178]
-  [bt] (4) ./resnet18(+0xab34) [0x555cf51b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7faeaab6e0]
-  [bt] (6) ./resnet18(+0xc098) [0x555cf53098]
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [11:23:33] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./resnet18(+0x2435c) [0x558024335c]
+  [bt] (1) ./resnet18(+0x24e54) [0x5580243e54]
+  [bt] (2) ./resnet18(+0x221ac) [0x55802411ac]
+  [bt] (3) ./resnet18(+0xc178) [0x558022b178]
+  [bt] (4) ./resnet18(+0xab34) [0x5580229b34]
+  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7fb2ef56e0]
+  [bt] (6) ./resnet18(+0xc098) [0x558022b098]
    FAIL zebra_340  Result 줄이 없다
-  [bt] (2) ./resnet18(+0x221ac) [0x556466d1ac]
-  [bt] (3) ./resnet18(+0xc178) [0x5564657178]
-  [bt] (4) ./resnet18(+0xab34) [0x5564655b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7fa4da76e0]
-  [bt] (6) ./resnet18(+0xc098) [0x5564657098]
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [11:23:33] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./resnet18(+0x2435c) [0x555f43a35c]
+  [bt] (1) ./resnet18(+0x24e54) [0x555f43ae54]
+  [bt] (2) ./resnet18(+0x221ac) [0x555f4381ac]
+  [bt] (3) ./resnet18(+0xc178) [0x555f422178]
+  [bt] (4) ./resnet18(+0xab34) [0x555f420b34]
+  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7faf4ef6e0]
+  [bt] (6) ./resnet18(+0xc098) [0x555f422098]
 == 실패 있음

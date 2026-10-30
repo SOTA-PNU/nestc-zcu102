@@ -8,22 +8,22 @@ Running 1 thread(s).
    calib.yaml 1109 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 11:18:25.435696    24 HostManager.cpp:242] Destroying host manager...
+I1030 11:23:35.884429    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 squeezenet, 출력 squeezenet0_flatten0_reshape0__1)
           범위 0~1.0, 채널 RGB, 정규화 1
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "squeezenet0_flatten0_reshape0__1"
 == 완료
 total 1368
-drwxr-xr-x 2 1000 1000    4096 Oct 30 11:18 .
-drwxr-xr-x 4 1000 1000    4096 Oct 30 11:18 ..
--rw-r--r-- 1 1000 1000   16684 Oct 30 11:18 Main.cpp
--rw-r--r-- 1 1000 1000    3762 Oct 30 11:18 VTARuntime.h
--rw-r--r-- 1 1000 1000      69 Oct 30 11:18 bundle.conf
--rw-r--r-- 1 1000 1000   53807 Oct 30 11:18 calib.yaml
--rw-r--r-- 1 1000 1000   52465 Oct 30 11:18 squeezenet.cpp
--rw-r--r-- 1 1000 1000    2095 Oct 30 11:18 squeezenet.h
--rw-r--r-- 1 1000 1000 1247328 Oct 30 11:18 squeezenet.weights.bin
+drwxr-xr-x 2 1000 1000    4096 Oct 30 11:23 .
+drwxr-xr-x 4 1000 1000    4096 Oct 30 11:23 ..
+-rw-r--r-- 1 1000 1000   16684 Oct 30 11:23 Main.cpp
+-rw-r--r-- 1 1000 1000    3762 Oct 30 11:23 VTARuntime.h
+-rw-r--r-- 1 1000 1000      69 Oct 30 11:23 bundle.conf
+-rw-r--r-- 1 1000 1000   53807 Oct 30 11:23 calib.yaml
+-rw-r--r-- 1 1000 1000   52465 Oct 30 11:23 squeezenet.cpp
+-rw-r--r-- 1 1000 1000    2095 Oct 30 11:23 squeezenet.h
+-rw-r--r-- 1 1000 1000 1247328 Oct 30 11:23 squeezenet.weights.bin
 == 번들 squeezenet  소스 squeezenet.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
@@ -48,21 +48,36 @@ Main.cpp:378:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
 == 링크
 == 실행
    FAIL cat_285  Result 줄이 없다
-  [bt] (2) ./squeezenet(+0x22e0c) [0x557c8c4e0c]
-  [bt] (3) ./squeezenet(+0xc238) [0x557c8ae238]
-  [bt] (4) ./squeezenet(+0xab34) [0x557c8acb34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7fb2d766e0]
-  [bt] (6) ./squeezenet(+0xc158) [0x557c8ae158]
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [11:23:46] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./squeezenet(+0x24fbc) [0x5555918fbc]
+  [bt] (1) ./squeezenet(+0x25ab4) [0x5555919ab4]
+  [bt] (2) ./squeezenet(+0x22e0c) [0x5555916e0c]
+  [bt] (3) ./squeezenet(+0xc238) [0x5555900238]
+  [bt] (4) ./squeezenet(+0xab34) [0x55558feb34]
+  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f963d96e0]
+  [bt] (6) ./squeezenet(+0xc158) [0x5555900158]
    FAIL dog_207  Result 줄이 없다
-  [bt] (2) ./squeezenet(+0x22e0c) [0x558ec94e0c]
-  [bt] (3) ./squeezenet(+0xc238) [0x558ec7e238]
-  [bt] (4) ./squeezenet(+0xab34) [0x558ec7cb34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f92e146e0]
-  [bt] (6) ./squeezenet(+0xc158) [0x558ec7e158]
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [11:23:46] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./squeezenet(+0x24fbc) [0x5572af6fbc]
+  [bt] (1) ./squeezenet(+0x25ab4) [0x5572af7ab4]
+  [bt] (2) ./squeezenet(+0x22e0c) [0x5572af4e0c]
+  [bt] (3) ./squeezenet(+0xc238) [0x5572ade238]
+  [bt] (4) ./squeezenet(+0xab34) [0x5572adcb34]
+  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7faf0c76e0]
+  [bt] (6) ./squeezenet(+0xc158) [0x5572ade158]
    FAIL zebra_340  Result 줄이 없다
-  [bt] (2) ./squeezenet(+0x22e0c) [0x5569429e0c]
-  [bt] (3) ./squeezenet(+0xc238) [0x5569413238]
-  [bt] (4) ./squeezenet(+0xab34) [0x5569411b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7fa570d6e0]
-  [bt] (6) ./squeezenet(+0xc158) [0x5569413158]
+terminate called after throwing an instance of 'dmlc::Error'
+  what():  [11:23:46] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
+Stack trace:
+  [bt] (0) ./squeezenet(+0x24fbc) [0x5591a8ffbc]
+  [bt] (1) ./squeezenet(+0x25ab4) [0x5591a90ab4]
+  [bt] (2) ./squeezenet(+0x22e0c) [0x5591a8de0c]
+  [bt] (3) ./squeezenet(+0xc238) [0x5591a77238]
+  [bt] (4) ./squeezenet(+0xab34) [0x5591a75b34]
+  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f96c326e0]
+  [bt] (6) ./squeezenet(+0xc158) [0x5591a77158]
 == 실패 있음
