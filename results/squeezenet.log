@@ -8,76 +8,30 @@ Running 1 thread(s).
    calib.yaml 1109 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 11:23:35.884429    24 HostManager.cpp:242] Destroying host manager...
+I1030 11:35:33.284529    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 squeezenet, 출력 squeezenet0_flatten0_reshape0__1)
           범위 0~1.0, 채널 RGB, 정규화 1
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "squeezenet0_flatten0_reshape0__1"
 == 완료
 total 1368
-drwxr-xr-x 2 1000 1000    4096 Oct 30 11:23 .
-drwxr-xr-x 4 1000 1000    4096 Oct 30 11:23 ..
--rw-r--r-- 1 1000 1000   16684 Oct 30 11:23 Main.cpp
--rw-r--r-- 1 1000 1000    3762 Oct 30 11:23 VTARuntime.h
--rw-r--r-- 1 1000 1000      69 Oct 30 11:23 bundle.conf
--rw-r--r-- 1 1000 1000   53807 Oct 30 11:23 calib.yaml
--rw-r--r-- 1 1000 1000   52465 Oct 30 11:23 squeezenet.cpp
--rw-r--r-- 1 1000 1000    2095 Oct 30 11:23 squeezenet.h
--rw-r--r-- 1 1000 1000 1247328 Oct 30 11:23 squeezenet.weights.bin
+drwxr-xr-x 2 1000 1000    4096 Oct 30 11:35 .
+drwxr-xr-x 4 1000 1000    4096 Oct 30 11:35 ..
+-rw-r--r-- 1 1000 1000   16684 Oct 30 11:35 Main.cpp
+-rw-r--r-- 1 1000 1000    3762 Oct 30 11:35 VTARuntime.h
+-rw-r--r-- 1 1000 1000      69 Oct 30 11:35 bundle.conf
+-rw-r--r-- 1 1000 1000   53807 Oct 30 11:35 calib.yaml
+-rw-r--r-- 1 1000 1000   52465 Oct 30 11:35 squeezenet.cpp
+-rw-r--r-- 1 1000 1000    2095 Oct 30 11:35 squeezenet.h
+-rw-r--r-- 1 1000 1000 1247328 Oct 30 11:35 squeezenet.weights.bin
 == 번들 squeezenet  소스 squeezenet.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
    ACL         3개
-== 컴파일
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dlpack/include
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dmlc-core/include
-Main.cpp: In function ‘int main(int, char**)’:
-Main.cpp:467:66: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-       (uint8_t *) initMutableWeightVars(squeezenet_config, "data");
-                                                                  ^
-Main.cpp:496:124: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-   int maxIdx = dumpInferenceResults(squeezenet_config, (uint8_t*) mutableWeightVarsAddr, "squeezenet0_flatten0_reshape0__1");
-                                                                                                                            ^
-Main.cpp: At global scope:
-Main.cpp:451:15: warning: ‘float* getInferenceResultVar(const BundleConfig&, uint8_t*, const char*)’ defined but not used [-Wunused-function]
- static float* getInferenceResultVar(const BundleConfig &config,
-               ^~~~~~~~~~~~~~~~~~~~~
-Main.cpp:378:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&, const char*, float*)’ defined but not used [-Wunused-function]
- static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT) {
-                 ^~~~~~~~~~~~~~~~~~~~~
-== 링크
-== 실행
-   FAIL cat_285  Result 줄이 없다
-terminate called after throwing an instance of 'dmlc::Error'
-  what():  [11:23:46] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
-Stack trace:
-  [bt] (0) ./squeezenet(+0x24fbc) [0x5555918fbc]
-  [bt] (1) ./squeezenet(+0x25ab4) [0x5555919ab4]
-  [bt] (2) ./squeezenet(+0x22e0c) [0x5555916e0c]
-  [bt] (3) ./squeezenet(+0xc238) [0x5555900238]
-  [bt] (4) ./squeezenet(+0xab34) [0x55558feb34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f963d96e0]
-  [bt] (6) ./squeezenet(+0xc158) [0x5555900158]
-   FAIL dog_207  Result 줄이 없다
-terminate called after throwing an instance of 'dmlc::Error'
-  what():  [11:23:46] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
-Stack trace:
-  [bt] (0) ./squeezenet(+0x24fbc) [0x5572af6fbc]
-  [bt] (1) ./squeezenet(+0x25ab4) [0x5572af7ab4]
-  [bt] (2) ./squeezenet(+0x22e0c) [0x5572af4e0c]
-  [bt] (3) ./squeezenet(+0xc238) [0x5572ade238]
-  [bt] (4) ./squeezenet(+0xab34) [0x5572adcb34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7faf0c76e0]
-  [bt] (6) ./squeezenet(+0xc158) [0x5572ade158]
-   FAIL zebra_340  Result 줄이 없다
-terminate called after throwing an instance of 'dmlc::Error'
-  what():  [11:23:46] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
-Stack trace:
-  [bt] (0) ./squeezenet(+0x24fbc) [0x5591a8ffbc]
-  [bt] (1) ./squeezenet(+0x25ab4) [0x5591a90ab4]
-  [bt] (2) ./squeezenet(+0x22e0c) [0x5591a8de0c]
-  [bt] (3) ./squeezenet(+0xc238) [0x5591a77238]
-  [bt] (4) ./squeezenet(+0xab34) [0x5591a75b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f96c326e0]
-  [bt] (6) ./squeezenet(+0xc158) [0x5591a77158]
-== 실패 있음
+   CMA 여유 17392 kB (필요 추정 40000 kB, 단일 코어)
+
+== 중단  CMA 가 모자란다
+   추론이 비정상 종료되면 FPGA 메모리가 반납되지 않는다.
+   GitHub Actions 의 board-recover 워크플로를 reboot 로 돌린 뒤 다시 시도한다.

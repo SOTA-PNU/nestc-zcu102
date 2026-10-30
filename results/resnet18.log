@@ -8,76 +8,30 @@ Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1030 11:23:22.740005    24 HostManager.cpp:242] Destroying host manager...
+I1030 11:35:26.678922    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 BGR, 정규화 0
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "resnetv10_dense0_fwd__1"
 == 완료
 total 11828
-drwxr-xr-x 2 1000 1000     4096 Oct 30 11:23 .
-drwxr-xr-x 3 1000 1000     4096 Oct 30 11:23 ..
--rw-r--r-- 1 1000 1000    16320 Oct 30 11:23 Main.cpp
--rw-r--r-- 1 1000 1000     3762 Oct 30 11:23 VTARuntime.h
--rw-r--r-- 1 1000 1000       67 Oct 30 11:23 bundle.conf
--rw-r--r-- 1 1000 1000    26235 Oct 30 11:23 calib.yaml
--rw-r--r-- 1 1000 1000    40427 Oct 30 11:23 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1000 1000     2190 Oct 30 11:23 mxnet_exported_resnet18.h
--rw-r--r-- 1 1000 1000 12003168 Oct 30 11:23 mxnet_exported_resnet18.weights.bin
+drwxr-xr-x 2 1000 1000     4096 Oct 30 11:35 .
+drwxr-xr-x 3 1000 1000     4096 Oct 30 11:35 ..
+-rw-r--r-- 1 1000 1000    16320 Oct 30 11:35 Main.cpp
+-rw-r--r-- 1 1000 1000     3762 Oct 30 11:35 VTARuntime.h
+-rw-r--r-- 1 1000 1000       67 Oct 30 11:35 bundle.conf
+-rw-r--r-- 1 1000 1000    26235 Oct 30 11:35 calib.yaml
+-rw-r--r-- 1 1000 1000    40427 Oct 30 11:35 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1000 1000     2190 Oct 30 11:35 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1000 1000 12003168 Oct 30 11:35 mxnet_exported_resnet18.weights.bin
 == 번들 resnet18  소스 mxnet_exported_resnet18.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_board/vta/vtalib/libvta_runtime.a
    ACL         3개
-== 컴파일
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dlpack/include
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dmlc-core/include
-Main.cpp: In function ‘int main(int, char**)’:
-Main.cpp:455:79: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-       (uint8_t *) initMutableWeightVars(mxnet_exported_resnet18_config, "data");
-                                                                               ^
-Main.cpp:484:128: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-   int maxIdx = dumpInferenceResults(mxnet_exported_resnet18_config, (uint8_t*) mutableWeightVarsAddr, "resnetv10_dense0_fwd__1");
-                                                                                                                                ^
-Main.cpp: At global scope:
-Main.cpp:439:15: warning: ‘float* getInferenceResultVar(const BundleConfig&, uint8_t*, const char*)’ defined but not used [-Wunused-function]
- static float* getInferenceResultVar(const BundleConfig &config,
-               ^~~~~~~~~~~~~~~~~~~~~
-Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&, const char*, float*)’ defined but not used [-Wunused-function]
- static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT) {
-                 ^~~~~~~~~~~~~~~~~~~~~
-== 링크
-== 실행
-   FAIL cat_285  Result 줄이 없다
-terminate called after throwing an instance of 'dmlc::Error'
-  what():  [11:23:33] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
-Stack trace:
-  [bt] (0) ./resnet18(+0x2435c) [0x5581d9f35c]
-  [bt] (1) ./resnet18(+0x24e54) [0x5581d9fe54]
-  [bt] (2) ./resnet18(+0x221ac) [0x5581d9d1ac]
-  [bt] (3) ./resnet18(+0xc178) [0x5581d87178]
-  [bt] (4) ./resnet18(+0xab34) [0x5581d85b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7f9eb5e6e0]
-  [bt] (6) ./resnet18(+0xc098) [0x5581d87098]
-   FAIL dog_207  Result 줄이 없다
-terminate called after throwing an instance of 'dmlc::Error'
-  what():  [11:23:33] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
-Stack trace:
-  [bt] (0) ./resnet18(+0x2435c) [0x558024335c]
-  [bt] (1) ./resnet18(+0x24e54) [0x5580243e54]
-  [bt] (2) ./resnet18(+0x221ac) [0x55802411ac]
-  [bt] (3) ./resnet18(+0xc178) [0x558022b178]
-  [bt] (4) ./resnet18(+0xab34) [0x5580229b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7fb2ef56e0]
-  [bt] (6) ./resnet18(+0xc098) [0x558022b098]
-   FAIL zebra_340  Result 줄이 없다
-terminate called after throwing an instance of 'dmlc::Error'
-  what():  [11:23:33] /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/dat_queue.h:39: Check failed: fpga_buff_ != nullptr: 
-Stack trace:
-  [bt] (0) ./resnet18(+0x2435c) [0x555f43a35c]
-  [bt] (1) ./resnet18(+0x24e54) [0x555f43ae54]
-  [bt] (2) ./resnet18(+0x221ac) [0x555f4381ac]
-  [bt] (3) ./resnet18(+0xc178) [0x555f422178]
-  [bt] (4) ./resnet18(+0xab34) [0x555f420b34]
-  [bt] (5) /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xe0) [0x7faf4ef6e0]
-  [bt] (6) ./resnet18(+0xc098) [0x555f422098]
-== 실패 있음
+   CMA 여유 17392 kB (필요 추정 40000 kB, 단일 코어)
+
+== 중단  CMA 가 모자란다
+   추론이 비정상 종료되면 FPGA 메모리가 반납되지 않는다.
+   GitHub Actions 의 board-recover 워크플로를 reboot 로 돌린 뒤 다시 시도한다.
