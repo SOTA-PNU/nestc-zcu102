@@ -1,4 +1,20 @@
-# 재양자화 버림에 의한 크기 손실 (2026-10-30, 가설)
+# 재양자화 버림에 의한 크기 손실 (2026-10-30 가설 → **2026-11-02 기각**)
+
+> **결론 먼저. 이 가설은 틀렸다.**
+> `lib/Backends/VTAInterpreter/VTAInterpreterNodes.cpp` 를 확인하니
+> 인터프리터도 **똑같이 버림 시프트**(`sum >> shift`, 924줄·1084줄)를 쓴다.
+> 반올림을 쓰지 않는다. 그러므로 버림 편향은 인터프리터와 보드의 **차이**를
+> 설명하지 못한다 — 둘 다 같은 편향을 갖는다.
+>
+> 아래에서 측정한 "크기가 샌다" 는 보정 기록(float 프로파일)과 보드의 int8
+> 실측을 비교한 것이다. 그것은 **양자화 자체의 손실**이며, 인터프리터에도
+> 똑같이 일어난다. 보드만의 결함이 아니다.
+>
+> 기록은 남긴다. 측정 자체는 유효하고(SqueezeNet 이 ResNet 과 달리 크기를
+> 유지하지 못한다는 사실), `ci/patch_requant_round.py` 도 유효한 개선이다 —
+> 반올림은 평균적으로 더 정확하므로 양자화 손실을 줄여 준다. 다만 그것이
+> 905/904/533 의 원인은 아니다.
+
 
 ## 증거
 
@@ -56,15 +72,16 @@ ResNet 이 버티는 이유도 설명된다. 채널이 64 이상이라 누산 �
 편향이 작고, 잔차 덧셈이 크기를 되살린다. SqueezeNet 의 squeeze 층은 출력이
 16 채널이고 1x1 이라 누산 항이 적어 편향이 그대로 드러난다.
 
-## 확인할 것
+## 확인 결과 (2026-11-02)
 
-VTAInterpreter 의 컨볼루션이 재양자화를 어떻게 하는지 봐야 한다.
-거기서 `std::round` 를 쓴다면 가설이 확정된다.
+```cpp
+// VTAInterpreterNodes.cpp:924
+auto out32 = sum >> shift;
+// VTAInterpreterNodes.cpp:1084
+quantization::clip<int32_t, int8_t>(sum >> shift);
+```
 
-```
-cp ~/nestc-upstream/lib/Backends/VTAInterpreter/VTAInterpreterNodes.cpp \
-   /mnt/c/Users/ehdgn/SOTA/nestc/.upstream-ref/
-```
+인터프리터도 버림이다. 가설 기각.
 
 ## 고치는 방법 — 바이어스에 반 LSB 를 더한다
 
