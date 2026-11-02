@@ -65,8 +65,30 @@ def main():
                 print("   %-44s %s" % (o, n.op_type), file=sys.stderr)
         return 1
 
-    extract_model(src, dst, [in_name], [cut])
-    out = onnx.load(dst)
+    # onnx.utils.extract_model 은 끝에서 check_model 을 부르는데, 이 모델은
+    # 구형 규약이라 "초기값이 그래프 입력에 없다" 로 막힌다. 체커를 거치지 않는
+    # Extractor 를 직접 쓰고, 초기값을 입력 목록에 보강해 규약을 맞춘다.
+    try:
+        from onnx.utils import Extractor
+        out = Extractor(m).extract_model([in_name], [cut])
+    except ImportError:
+        extract_model(src, dst, [in_name], [cut])
+        out = onnx.load(dst)
+
+    have = {i.name for i in out.graph.input}
+    added = 0
+    for init in out.graph.initializer:
+        if init.name in have:
+            continue
+        vi = out.graph.input.add()
+        vi.name = init.name
+        vi.type.tensor_type.elem_type = init.data_type
+        for d in init.dims:
+            vi.type.tensor_type.shape.dim.add().dim_value = d
+        added += 1
+    if added:
+        print("   초기값 %d개를 그래프 입력에 보강했다 (구형 규약)" % added)
+    onnx.save(out, dst)
     print("잘랐다: %s -> %s" % (src, dst))
     print("   입력 %s, 출력 %s, 노드 %d개 (원본 %d개)"
           % (in_name, cut, len(out.graph.node), len(m.graph.node)))
