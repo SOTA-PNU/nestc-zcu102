@@ -104,7 +104,11 @@ require_cma() {  # $1 = 필요한 kB, $2 = 설명
   fi
 }
 
-require_cma 40000 "단일 코어"
+# 40000 kB 로는 모자랐다. 2026-11-02 model-test 에서 여유 43956 kB 로
+# 관문을 통과한 squeezenet 이 dat_queue.h:39 fpga_buff_ != nullptr 로
+# 죽었다. board-multi-run.sh 의 실측은 코어 하나당 약 76 MB 였다.
+# 실측보다 조금 위인 80000 kB 로 올린다.
+require_cma 80000 "단일 코어"
 
 echo "== 컴파일"
 cd "$BUNDLE"
@@ -152,6 +156,12 @@ for pair in ${EXPECT:-}; do
     FAIL=1
   fi
 done
+
+# 실행이 끝난 뒤 CMA 를 다시 잰다. 정상 종료해도 조금씩 새기 때문에
+# 모델을 연달아 돌리면 뒤쪽 모델이 메모리 때문에 죽는다. 그 누수를
+# 눈에 보이게 남긴다.
+CMA_AFTER=$(cma_free_kb)
+[ -n "$CMA_AFTER" ] && echo "   CMA 여유 ${CMA_AFTER} kB (실행 뒤)"
 
 [ "$FAIL" = 0 ] && echo "== 전부 통과" || echo "== 실패 있음"
 exit "$FAIL"

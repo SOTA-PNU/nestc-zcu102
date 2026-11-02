@@ -104,19 +104,19 @@ def main():
     else:
         files.sort(key=lambda f: os.path.getmtime(f))
 
-    print("%-44s %9s %5s %5s %8s %6s %6s %6s  %s" %
+    print("%-60s %9s %5s %5s %8s %6s %6s %6s  %s" %
           ("파일(실행 순서)", "원소", "최소", "최대", "평균", "0%", "음수%", "포화%", "소견"))
     flagged = []
     for f in files:
         s = stats(f)
         if s is None:
-            print("%-44s (빈 파일)" % os.path.basename(f)[:44])
+            print("%-60s (빈 파일)" % os.path.basename(f))
             continue
         v = verdict(s)
         if v:
             flagged.append((os.path.basename(f), v))
-        print("%-44s %9d %5d %5d %8.2f %6.1f %6.1f %6.1f  %s" %
-              (os.path.basename(f)[:44], s["n"], s["min"], s["max"], s["mean"],
+        print("%-60s %9d %5d %5d %8.2f %6.1f %6.1f %6.1f  %s" %
+              (os.path.basename(f), s["n"], s["min"], s["max"], s["mean"],
                s["zero%"], s["neg%"], s["sat%"], v))
 
     print()
