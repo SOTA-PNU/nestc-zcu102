@@ -139,11 +139,64 @@ nm -C ~/nest-compiler-2024/build_board/vta/vtalib/libVTABundle.a | grep -c inser
 
 ---
 
+## 5-b. 실제 구축에서 걸린 것들 (2026-11-02, vcu118-dev)
+
+이 절은 겪은 순서대로 적는다. 같은 데서 막히지 말라고 남긴다.
+
+**메모리가 제일 큰 제약이었다.** vcu118-dev 는 총 15GB 인데 그중 13.7GB 를
+Vivado 가 쓰고 있었다(CoralNPU VCU118 합성, 7시간 경과, CPU 370%). 쓸 수
+있는 것은 1.9GB 뿐이었다. 스왑이 65GB 잡혀 있어 강제 종료까지는 안 가지만,
+그 상태에서 컴파일러를 빌드하면 스왑을 타면서 남의 합성 작업이 눈에 띄게
+느려진다. **그래서 설치와 이미지 받기는 그때 하고, 실제 CI 작업은 합성이
+끝난 뒤에 켜는 순서로 갔다.** 설치와 받기는 디스크와 네트워크만 쓴다.
+
+계정이 `sota` 공용이라 `ps` 로는 누구 작업인지 알 수 없다. 긴 작업이
+보이면 연구실에 먼저 물어본다.
+
+**터미널이 xterm.js 면 tmux 가 안 붙는다.** `tmux new -s pull` 을 치면
+`^[P>|xterm.js(...)^[\` 같은 제어 문자만 나오고 셸로 돌아온다. tmux 대신
+nohup 을 쓴다.
+
+**백그라운드에 sudo 를 붙이면 멈춘다.** `sudo nohup docker pull ... &` 는
+`[1]+ Stopped` 가 된다. sudo 가 비밀번호를 물으려는데 백그라운드라 입력을
+받지 못해서다. sudo 를 빼는 쪽이 낫다 — `usermod -aG docker` 한 뒤
+재로그인 없이 바로 쓰려면:
+
+```sh
+newgrp docker
+docker ps                                    # 머리글만 나오면 성공
+nohup docker pull leejaymin/nestc-ssh:latest > ~/pull.log 2>&1 &
+tail -3 ~/pull.log                           # 진행 확인
+```
+
+**여러 줄을 한꺼번에 붙여넣지 않는다.** 비밀번호를 묻는 명령이 섞여 있으면
+그 다음 줄이 비밀번호로 먹힌다. 실제로 `sudo -v` 다음 줄이 그렇게 날아갔다.
+
+**보드 주소.** 서버에서 `sota.pusan.ac.kr` 은 `164.125.249.13` 으로 풀리고
+25022 포트가 열린다. 이 서버를 고른 가장 큰 이유가 이것이다 — GitHub
+클라우드 러너는 같은 주소로 종료 코드 255 로 실패한다.
+
+---
+
 ## 6. 서버에 컴파일러 빌드
 
 도커 이미지는 **환경만 제공한다.** `model-compiler` 는 들어 있지 않으므로
 직접 빌드해야 한다. 호스트 디렉터리를 마운트하고 그 안에서 빌드하면 결과물이
 호스트에 남는다.
+
+> **빌드하지 않고 복사하는 쪽을 먼저 본다.** 이 단계가 메모리를 가장 많이
+> 쓴다. 이미 빌드된 기계(개인 PC 의 WSL)가 같은 교내망에 있다면 트리를
+> 통째로 옮기는 편이 빠르고 안전하다. 바이너리는 어차피 컨테이너 안에서만
+> 돌기 때문에 호스트 배포판이 달라도 상관없다.
+>
+> ```sh
+> # 개인 PC 의 WSL 에서
+> du -sh ~/nestc-upstream ~/nestc-upstream/build       # 먼저 크기를 잰다
+> rsync -a --info=progress2 ~/nestc-upstream/ sota@vcu118-dev:~/nestc-upstream/
+> ```
+>
+> 복사가 끝나면 서버에서 `ls -l ~/nestc-upstream/build/glow/bin/model-compiler`
+> 로 확인하고 이 절의 나머지는 건너뛴다.
 
 ```sh
 docker pull leejaymin/nestc-ssh:latest
