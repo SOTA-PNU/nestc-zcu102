@@ -1,0 +1,20 @@
+== 모델 sq-cut-fire5
+   ONNX   /src/build/models/squeezenet.onnx
+   이미지 1장
+   출력   /work/bundle-out/sq-cut-fire5
+== 0단계 ONNX 자르기 (squeezenet0_concat3)
+Traceback (most recent call last):
+  File "/work/ci/cut_onnx.py", line 77, in <module>
+    sys.exit(main())
+  File "/work/ci/cut_onnx.py", line 68, in main
+    extract_model(src, dst, [in_name], [cut])
+  File "/usr/local/lib/python3.8/dist-packages/onnx/utils.py", line 196, in extract_model
+    onnx.checker.check_model(output_path)
+  File "/usr/local/lib/python3.8/dist-packages/onnx/checker.py", line 97, in check_model
+    C.check_model_path(model)
+onnx.onnx_cpp2py_export.checker.ValidationError: squeezenet0_conv0_weight in initializer but not in graph input
+/home/ehdgns/actions-runner/_work/nestc-zcu102/nestc-zcu102/bundle-out/sq-cut-fire5/*.cpp: No such file or directory
+/home/ehdgns/actions-runner/_work/nestc-zcu102/nestc-zcu102/bundle-out/sq-cut-fire5/*.h: No such file or directory
+/home/ehdgns/actions-runner/_work/nestc-zcu102/nestc-zcu102/bundle-out/sq-cut-fire5/*.bin: No such file or directory
+/home/ehdgns/actions-runner/_work/nestc-zcu102/nestc-zcu102/bundle-out/sq-cut-fire5/bundle.conf: No such file or directory
+/home/xilinx/board-build-run.sh: line 32: /home/xilinx/bundles/sq-cut-fire5/bundle.conf: No such file or directory
