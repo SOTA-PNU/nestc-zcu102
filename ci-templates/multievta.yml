@@ -40,7 +40,9 @@ jobs:
 
     env:
       BOARD_SRC: /home/xilinx/nest-compiler-2024
-      BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_board
+      # aarch64 다. generic 은 CPU 폴백이 순수 C 라 16배 느리고, 그 탓에
+      # 멀티코어 효과가 묻힌다(2026-10-30 에 2코어 이득이 0 이었던 이유).
+      BOARD_BUILD: /home/xilinx/nest-compiler-2024/build_aarch64
       DOCKER_IMAGE: leejaymin/nestc-ssh:latest
 
     steps:

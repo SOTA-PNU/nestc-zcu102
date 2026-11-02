@@ -130,6 +130,7 @@ IMG=${MULTI_IMAGE:-cat_285}
 # FPGA 는 연속 물리 메모리(CMA)를 쓴다. 코어마다 가중치·활성 버퍼를 따로
 # 잡으므로 네 배가 필요하다. 모자라면 dat_queue.h 의
 # "Check failed: fpga_buff_ != nullptr" 로 죽는다. 먼저 재 둔다.
+CMA_START=$(cma_free_kb)
 echo "-- CMA 현황 --"
 grep -i cma /proc/meminfo || echo "(meminfo 에 CMA 항목 없음)"
 [ -r /sys/class/xlnk/xlnk/xlnk_bufpool_size ] && cat /sys/class/xlnk/xlnk/xlnk_bufpool_size || true
@@ -142,7 +143,26 @@ for h in "$BUNDLE"/*.h; do
 done
 ls -l "$BUNDLE"/*.weights.bin | awk '{printf "   %-40s %s bytes\n", $NF, $5}'
 
+# 실행 중 CMA 를 샘플링한다. 코어당 실제 소요를 알아야 4코어가 들어가는지
+# 계산할 수 있다. 가드의 60MB/코어 는 어림값이다.
+( for i in $(seq 1 40); do
+    grep -i '^CmaFree' /proc/meminfo | awk '{print $2}'
+    sleep 3
+  done ) > /tmp/cma_samples.txt 2>/dev/null &
+SAMPLER=$!
+
 out=$(sudo -E env PATH="$PATH" "./${MODEL_NAME}_multi" "$IMGDIR/$IMG.png" 2>&1 || true)
+
+kill "$SAMPLER" 2>/dev/null || true
+if [ -s /tmp/cma_samples.txt ]; then
+  CMA_MIN=$(sort -n /tmp/cma_samples.txt | head -1)
+  CMA_BEFORE=$(cma_free_kb)
+  echo "-- CMA 실측 --"
+  echo "   실행 중 최저 여유 ${CMA_MIN} kB"
+  USED=$(( ${CMA_START:-0} - CMA_MIN ))
+  [ "$USED" -gt 0 ] && echo "   사용량 ${USED} kB  (코어당 약 $(( USED / CORES )) kB)"
+  rm -f /tmp/cma_samples.txt
+fi
 echo "$out" | tail -8
 
 total=$(echo "$out" | sed -n 's/^Inference time: *//p' | tail -1 | tr -d 'ms')
