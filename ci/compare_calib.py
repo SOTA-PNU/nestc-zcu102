@@ -28,6 +28,7 @@
     포화(기대 127 이상)인 층은 비교에서 뺀다. int8 벽에 막혀 최대값이
     눌리기 때문에 어긋난 것처럼 보인다.
 """
+import math
 import os
 import re
 import struct
@@ -103,6 +104,28 @@ def parse_dumps(path):
     return uniq
 
 
+def rule_scale_inv(cmin, cmax):
+    """번들이 스케일을 안 적는 층을 위한 규칙.
+
+    VTA 합성곱(`convolution_wo_tr`)은 스케일을 `1.0/N` 상수로 적지 않고
+    시프트 값으로 들고 있어서 소스에서 바로 읽을 수 없다. 하필 우리가
+    의심하는 층들이 전부 이쪽이다.
+
+    대신 규칙으로 메운다. ResNet-18 에서 번들이 적어 둔 스케일 18개를
+    보정 범위와 맞춰 보니 예외 없이
+
+        스케일의 역수 = 2^floor(log2(127 / 최대절대값))
+
+    이었다. 읽은 값이 있으면 그것을 쓰고, 없을 때만 이 규칙을 쓴다.
+    규칙으로 메운 줄은 표에 그렇다고 적는다 — 읽은 것과 추정한 것을
+    섞어 놓고 구분하지 않으면 나중에 속는다.
+    """
+    ma = max(abs(cmin), abs(cmax))
+    if ma <= 0:
+        return None
+    return 2.0 ** math.floor(math.log2(127.0 / ma))
+
+
 def match_calib(name, calib):
     """끝의 __숫자 까지 같을 때만 맞은 것으로 친다.
 
@@ -142,10 +165,19 @@ def main():
     print("-" * len(hdr))
 
     first_bad = None
+    skipped = 0           # 비교하지 못한 층
+    skipped_before = 0    # 그중 first_bad 앞쪽
     for idx, name, n, bmin, bmax in rows:
         key = match_calib(name, calib)
         scale_inv = inv.get(name) or inv.get(re.sub(r"_res$", "", name))
+        guessed = False
+        if scale_inv is None and key is not None:
+            scale_inv = rule_scale_inv(calib[key]["min"], calib[key]["max"])
+            guessed = scale_inv is not None
         if key is None or scale_inv is None:
+            skipped += 1
+            if first_bad is None:
+                skipped_before += 1
             print("%-52s %7d %7s %9s %8s  %s"
                   % (name, bmax, "-", "-",
                      "%g" % scale_inv if scale_inv else "-",
@@ -153,9 +185,12 @@ def main():
             continue
         cmax = calib[key]["max"]
         want = cmax * scale_inv
-        note = []
+        note = ["규칙 추정"] if guessed else []
         if want >= 127:
             note.append("포화 — 비교 제외")
+            skipped += 1
+            if first_bad is None:
+                skipped_before += 1
         else:
             err = (bmax - want) / want if want > 0 else None
             if err is None:
@@ -171,9 +206,18 @@ def main():
 
     print()
     if first_bad:
+        idx, name, bmax, want, err = first_bad
         print("처음 어긋나는 층: #%d %s — 보드 %d, 기대 %.1f (%+.0f%%)"
-              % first_bad)
-        print("그 층의 연산 하나만 보면 된다. 그 앞은 맞는다는 뜻이다.")
+              % (idx, name, bmax, want, err * 100))
+        if skipped_before:
+            print("다만 그 앞에서 %d개 층을 비교하지 못하고 건너뛰었다."
+                  % skipped_before)
+            print("따라서 이것이 '처음' 이라고 단정할 수 없다. 건너뛴 층부터 본다.")
+        else:
+            print("그 층의 연산 하나만 보면 된다. 그 앞은 맞는다는 뜻이다.")
+    elif skipped:
+        print("비교한 층은 전부 허용 오차 안이다. 다만 %d개 층을 비교하지"
+              " 못했으므로 '문제 없음' 이라고 할 수는 없다." % skipped)
     else:
         print("모든 층이 허용 오차 안이다. 크기 문제는 아니다.")
 
