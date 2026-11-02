@@ -172,6 +172,30 @@ tail -3 ~/pull.log                           # 진행 확인
 **여러 줄을 한꺼번에 붙여넣지 않는다.** 비밀번호를 묻는 명령이 섞여 있으면
 그 다음 줄이 비밀번호로 먹힌다. 실제로 `sudo -v` 다음 줄이 그렇게 날아갔다.
 
+**가상머신이면 NAT 를 먼저 본다.** vcu118-dev 는 VirtualBox 게스트였다.
+`hostname -I` 가 `10.0.2.15` 를 내놓고 그룹에 `vboxsf` 가 있으면 그렇다.
+NAT 는 **나가는 것만** 통과시킨다. CI 에는 문제가 없다 — self-hosted 러너는
+GitHub 쪽으로 나가서 연결을 유지하고, 보드로 가는 SSH 도 나가는 방향이다.
+막히는 것은 개인 PC 에서 트리를 `rsync` 로 밀어 넣는 것 하나뿐이다.
+
+그 하나는 복사하지 말고 **서버가 직접 클론**하면 된다. 서버에서
+`git ls-remote` 가 GitLab 과 GitHub 양쪽에 닿는다. 그리고 개인 PC 의
+상류 트리는 상류 HEAD 보다 커밋 하나(우리 GitHub Actions 커밋)만 앞서
+있고 그 커밋은 GitHub 미러에 있으므로, 거기서 받으면 완전히 같은 지점이
+된다.
+
+```sh
+git clone --recursive https://gitlab.com/ones-ai/nest-compiler.git ~/nestc-upstream
+cd ~/nestc-upstream
+git remote add github https://github.com/SOTA-PNU/nestc-etri.git
+git fetch github && git checkout -B main github/main
+```
+
+작업 디렉터리에 남아 있던 수정(`VTASave.cpp`, `VTAInterpreterFunction.cpp`,
+`.gitignore`)은 옮기지 않아도 된다. `ci/patch_tiling.py` 와
+`ci/patch_concat.py` 가 매 실행마다 다시 만든다. 상류 패치를 손으로
+고치지 않고 스크립트로 유지해 온 것이 여기서 값을 한다.
+
 **보드 주소.** 서버에서 `sota.pusan.ac.kr` 은 `164.125.249.13` 으로 풀리고
 25022 포트가 열린다. 이 서버를 고른 가장 큰 이유가 이것이다 — GitHub
 클라우드 러너는 같은 주소로 종료 코드 255 로 실패한다.
