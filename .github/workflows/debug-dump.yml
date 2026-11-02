@@ -103,6 +103,7 @@ jobs:
               "$GITHUB_WORKSPACE/debug-out/$MODEL"/calib.yaml board:"$BB/"
           scp scripts/board-build-run.sh board:/home/xilinx/board-build-run.sh
           scp ci/analyze_debug_dump.py board:/home/xilinx/analyze_debug_dump.py
+          scp ci/compare_calib.py board:/home/xilinx/compare_calib.py
           ssh board "chmod +x /home/xilinx/board-build-run.sh"
 
           # 추론은 틀려도 상관없다. 필요한 것은 떨어진 .bin 들이다.
@@ -113,7 +114,13 @@ jobs:
             echo '--- 덤프 개수 ---'
             ls $BB/*.bin | wc -l
             echo '--- 분석 ---'
-            python3 /home/xilinx/analyze_debug_dump.py $BB $BB/calib.yaml" \
+            python3 /home/xilinx/analyze_debug_dump.py $BB $BB/calib.yaml
+            echo '--- 기대값 대조 ---'
+            # 번들 소스에 양자화 스케일이 상수로 박혀 있다. 그것과
+            # 보정 프로파일의 실수 범위를 합치면 각 층이 내야 할 int8
+            # 최대값이 나온다. 실제 덤프와 다르면 그 층에서 틀어진 것이다.
+            NET=\$(ls $BB/*.cpp | grep -v '/Main\.cpp$' | head -1)
+            python3 /home/xilinx/compare_calib.py $BB/calib.yaml $BB \"\$NET\"" \
             2>&1 | tee "logs/dump-$MODEL.log"
 
       - name: 결과를 저장소에 기록
@@ -128,7 +135,17 @@ jobs:
             echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ""
             echo '```'
-            sed -n '/--- 분석 ---/,$p' "logs/dump-$MODEL.log" 2>/dev/null | head -200
+            sed -n '/--- 분석 ---/,/--- 기대값 대조 ---/p' "logs/dump-$MODEL.log" 2>/dev/null | head -200
+            echo '```'
+            echo ""
+            echo "## 기대값 대조"
+            echo ""
+            echo "번들에 박힌 양자화 스케일과 보정 프로파일의 실수 범위로"
+            echo "각 층이 내야 할 int8 최대값을 계산해 실제 덤프와 맞춘 것이다."
+            echo "처음 크게 어긋나는 층이 범인이다. 포화한 층은 int8 벽에"
+            echo "막혀 최대값이 눌리므로 비교에서 뺀다."
+            echo '```'
+            sed -n '/--- 기대값 대조 ---/,$p' "logs/dump-$MODEL.log" 2>/dev/null | head -200
             echo '```'
             echo ""
             echo "## 보정 범위 (calib.yaml)"
