@@ -92,6 +92,20 @@ OPTS=()
 # shellcheck disable=SC2206
 [ -n "${CALIB_EXTRA:-}" ] && OPTS+=( ${CALIB_EXTRA} )
 
+# ── ONNX 자르기 (이분 탐색용) ─────────────────────────────────────────
+# conf 에 ONNX_CUT_AT 이 있으면 그 텐서에서 모델을 끊는다. 그 지점이 모델의
+# 출력이 되므로, 같은 입력으로 인터프리터와 보드를 각각 끝까지 돌려 답을
+# 비교하면 어디서부터 갈라지는지 알 수 있다.
+if [ -n "${ONNX_CUT_AT:-}" ]; then
+  CUT="$(cd "$(dirname "$0")/.." && pwd)/ci/cut_onnx.py"
+  [ -f "$CUT" ] || { echo "cut_onnx.py 를 찾지 못했다: $CUT" >&2; exit 1; }
+  echo "== 0단계 ONNX 자르기 ($ONNX_CUT_AT)"
+  python3 "$CUT" "$ONNX" "$OUT/cut.onnx" "$INPUT_NAME" "$ONNX_CUT_AT"
+  ONNX="$OUT/cut.onnx"
+  # 잘린 모델의 출력은 4차원 특징맵이라 softmax/topk 가 맞지 않는다.
+  OPTS=()
+fi
+
 echo "== 1단계 보정 프로파일"
 "$IC" "${IMAGES[@]}" \
   -m="$ONNX" \
@@ -105,6 +119,24 @@ echo "== 1단계 보정 프로파일"
 
 [ -s "$OUT/calib.yaml" ] || { echo "calib.yaml 이 비었다" >&2; exit 1; }
 echo "   calib.yaml $(wc -l < "$OUT/calib.yaml") 줄"
+
+# 자른 모델이면 양자화된 인터프리터로 한 번 더 돌려 기준값을 남긴다.
+# 보드 결과와 이 값을 비교해 갈라지는 지점을 찾는다.
+if [ -n "${ONNX_CUT_AT:-}" ]; then
+  echo "== 1-b단계 인터프리터 기준값 (양자화)"
+  for img in "${IMAGES[@]}"; do
+    echo "   -- $(basename "$img") --"
+    "$IC" "$img" \
+      -m="$ONNX" \
+      -model-input-name="$INPUT_NAME" \
+      -backend=VTAInterpreter \
+      -image-layout="$IMAGE_LAYOUT" \
+      -image-mode="$IMAGE_MODE" \
+      "${OPTS[@]}" \
+      -load-profile="$OUT/calib.yaml" \
+      -quantization-schema=symmetric_with_power2_scale 2>&1 | grep -E "Label-K1|Result" || true
+  done
+fi
 
 # ── 2단계 번들 생성 ───────────────────────────────────────────────────
 # 양자화 스케일이 이 시점에 코드로 박힌다. 실행 시점에 바꿀 수 없다.
