@@ -33,12 +33,27 @@ CmaFree 를 3초마다 재서 코어당 사용량을 실측했더니 **77,616 kB
 큐가 모자라면 `CHECK(buff_size <= kMaxBytes)` 에 걸려 죽는다
 (dat_queue.h:165, 572, 589). 조용히 틀린 답을 내는 것이 아니라 그 자리에서
 멈추므로, 너무 작게 잡았는지는 바로 드러난다. 그래도 한 번에 끝까지
-내리지 말고 1<<24 부터 확인하는 편이 낫다.
+내리지 말고 1<<24 부터 확인하는 편이 낫다. 더 내려 보려면:
 
-    NESTC_VTA_MAX_XFER_LOG=24 python3 patch_vta_max_xfer.py <상류>
+    NESTC_VTA_MAX_XFER_LOG=23 python3 patch_vta_max_xfer.py <상류>
 
-기본값은 23 이다. 멱등하다 — 이미 바뀌어 있으면 아무것도 하지 않는다.
-되돌리려면 25 를 주면 된다.
+기본값은 24 다. 23 이 아닌 이유는 이 상수가 큐 크기만이 아니라 DMA 전송
+한 번의 상한으로도 쓰이기 때문이다.
+
+    vta/vtalib/lib/zcu102/pynq_driver.cc:30
+        assert(size <= VTA_MAX_XFER);
+
+가중치 파일이 12MB 라, 어딘가에서 한 번에 통째로 옮기면 8MB 상한에
+걸린다. 16MB 면 그 경우에도 통과하면서 네 코어가 178MB 로 들어간다
+(CMA 256MB 에 78MB 여유). 8MB 로도 되는지는 네 코어가 일단 돌고 난
+뒤에 확인한다.
+
+나머지 사용처는 문제가 없다. cmd_queue.h 185·261·565 행은 명령 개수가
+큐를 넘는지 보는 것이라 모델의 명령 스트림 크기에 비례하고, simulator/
+쪽 복사본은 NESTC_USE_VTASIM=0 이라 빌드에 들어가지 않는다.
+
+멱등하다 — 이미 바뀌어 있으면 아무것도 하지 않는다. 되돌리려면 25 를
+주면 된다.
 
 이 패치는 **보드에서** 적용하고 vtalib 를 다시 빌드해야 한다. 컴파일러
 쪽은 영향이 없다.
@@ -55,7 +70,7 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     root = sys.argv[1]
-    want = int(os.environ.get("NESTC_VTA_MAX_XFER_LOG", "23"))
+    want = int(os.environ.get("NESTC_VTA_MAX_XFER_LOG", "24"))
     if not 20 <= want <= 25:
         sys.exit("NESTC_VTA_MAX_XFER_LOG 는 20..25 사이여야 한다: %d" % want)
 
