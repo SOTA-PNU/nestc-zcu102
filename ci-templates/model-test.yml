@@ -9,10 +9,6 @@ name: model-test
 # board-test 가 상류 테스트의 회귀를 막는 장치라면, 이쪽은 우리가 올리는
 # 모델을 위한 것이다. 모델 하나는 models/<이름>.conf 하나로 기술한다.
 #
-# 단일 코어 모델 다음에 4코어 멀티 EVTA(models-multi/resnet18-4core)도
-# 돌린다. 네 코어를 다 쓰는 구성이 매 푸시마다 살아 있는지 보려는 것이다.
-# 2코어와의 처리량 비교는 multievta 워크플로에 남겨 둔다.
-#
 # 러너는 PC(WSL x64) 의 self-hosted 다. 보드는 Ubuntu 18.04(glibc 2.27)라
 # Node 20 기반 액션이 돌지 않고 가용 메모리도 615MB 뿐이다.
 #
@@ -29,8 +25,6 @@ on:
       - "ci/**"
       - "scripts/gen-bundle.sh"
       - "scripts/board-build-run.sh"
-      - "models-multi/resnet18-4core.conf"
-      - "scripts/board-multi-run.sh"
       - ".github/workflows/model-test.yml"
   workflow_dispatch:
     inputs:
@@ -141,48 +135,29 @@ jobs:
             ninja model-compiler image-classifier
 
       # 보드 쪽 런타임(vtalib)에 우리 패치를 적용한다.
-      #   patch_relu_rescale.py   독립 ReLU 재양자화의 int8 포화 복원
-      #   patch_vta_max_xfer.py   명령 큐를 32MB -> 16MB 로. 네 코어가 CMA 에
-      #                           들어가게 하는 것이다. 근거는 그 파일 머리에.
+      #   patch_relu_rescale.py  독립 ReLU 재양자화의 int8 포화 복원
       # 컴파일러 패치와 달리 이쪽은 보드에서 빌드해야 한다. make 는 증분이라
       # 바뀐 것이 없으면 금방 끝난다.
-      #
-      # VTABundle 하나만 짓지 않고 vta/vtalib 디렉터리를 통째로 짓는다.
-      # VTA_MAX_XFER 는 driver.h 와 cmd_queue.h 에 걸쳐 있어 런타임
-      # 라이브러리(libvta_runtime.a)도 같이 다시 지어야 하기 때문이다.
       - name: 보드 런타임 패치 적용 및 재빌드
-        timeout-minutes: 30
         run: |
           # pipefail 이 없으면 tee/tail 의 종료 코드만 보게 되어
           # 보드 빌드가 실패해도 조용히 통과한다.
           set -euo pipefail
           mkdir -p logs
-          # 러너가 Wi-Fi 라 SSH 가 중간에 끊기는 일이 있다. 2026-11-03 에
-          # 보드에서는 빌드가 다 끝났는데 세션이 안 돌아와 단계가 매달렸다.
-          # 패치는 멱등하고 make 는 증분이라 다시 돌려도 안전하다.
-          for try in 1 2 3; do
-            [ "$try" = 1 ] || echo "== SSH 재시도 $try"
-          scp ci/patch_relu_rescale.py ci/patch_vta_max_xfer.py board:/home/xilinx/
+          scp ci/patch_relu_rescale.py board:/home/xilinx/
           ssh board "set -euo pipefail
             python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
-            python3 /home/xilinx/patch_vta_max_xfer.py /home/xilinx/nest-compiler-2024
-            echo '--- 적용된 VTA_MAX_XFER ---'
-            grep -n 'define VTA_MAX_XFER' \
-              /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/vta/driver.h
-            cd $BOARD_BUILD/vta/vtalib
-            echo '--- vtalib 전체 빌드 ---'
-            make -j1 2>&1 | tail -25
+            cd $BOARD_BUILD
+            echo '--- VTABundle 빌드 ---'
+            make -j1 VTABundle 2>&1 | tail -25
             echo '--- 라이브러리 ---'
-            ls -l libVTABundle.a libvta_runtime.a
-            echo '--- 소스에 ReLU 패치 표식 ---'
+            ls -l vta/vtalib/libVTABundle.a
+            echo '--- 소스에 패치 표식 ---'
             grep -c nestc_relu_rescale_patch \
               /home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_generic.cpp
-            echo '--- 라이브러리에 ReLU 패치 표식 (0 이면 재빌드 안 된 것) ---'
-            strings libVTABundle.a | grep -c nestc_relu || true" \
-            2>&1 | tee logs/board-patch.log && break
-            [ "$try" = 3 ] && { echo "SSH 가 세 번 다 실패했다"; exit 1; }
-            sleep 20
-          done
+            echo '--- 라이브러리에 패치 표식 (0 이면 재빌드 안 된 것) ---'
+            strings vta/vtalib/libVTABundle.a | grep -c nestc_relu || true" \
+            2>&1 | tee logs/board-patch.log
 
       # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
       # 재부팅 전까지 사용 불가 상태가 될 수 있다.
@@ -249,55 +224,6 @@ jobs:
 
           echo "HARD_FAIL=$HARD_FAIL" >> "$GITHUB_ENV"
 
-      # 네 코어를 동시에 연다. 단일 코어 모델 뒤에 두는 이유는, 4코어가
-      # 중간에 죽어 CMA 를 들고 가더라도 단일 코어 판정은 이미 끝나 있게
-      # 하려는 것이다. board-multi-run.sh 가 실행 전에 CMA 관문으로 막는다.
-      # 판정은 라벨 비교가 아니라 "틀린 추론 0건 + 시간 줄" 이다.
-      # 한 모델만 골라 돌릴 때(inputs.model)는 건너뛴다.
-      - name: 4코어 멀티 EVTA
-        if: ${{ inputs.model == '' }}
-        run: |
-          set -euo pipefail
-          m=resnet18-4core
-          CONF="models-multi/$m.conf"
-          OUT="$GITHUB_WORKSPACE/multi-out/$m"
-          BB="/home/xilinx/bundles/multi-$m"
-          scp scripts/board-multi-run.sh board:/home/xilinx/board-multi-run.sh
-          ssh board "chmod +x /home/xilinx/board-multi-run.sh"
-          rm -rf "$OUT"; mkdir -p "$OUT"
-          {
-            docker run --rm --user "$(id -u):$(id -g)" \
-              -v "$NESTC_UPSTREAM":/src -v "$GITHUB_WORKSPACE":/work -w /work \
-              "$DOCKER_IMAGE" \
-              bash scripts/gen-bundle.sh --conf "$CONF" \
-                --tools "$TOOLS_IN_CONTAINER" --upstream /src \
-                --out "/work/multi-out/$m"
-
-            ssh board "mkdir -p $BB"
-            scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf board:"$BB/"
-
-            ssh board "set -eu
-              export PATH=\$HOME/bin:\$PATH
-              /home/xilinx/board-multi-run.sh --bundle $BB \
-                --src $BOARD_SRC --build $BOARD_BUILD"
-          } 2>&1 | tee "logs/multi-$m.log" || true
-
-          if grep -q '^== 전부 통과' "logs/multi-$m.log"; then
-            V="통과"
-          else
-            V="실패"
-            echo "HARD_FAIL=1" >> "$GITHUB_ENV"
-          fi
-          {
-            echo "### $m — $V"
-            echo ""
-            echo '```'
-            grep -E '^   (총|장당|처리량|사용량|실행 중)|fpga_buff_|Check failed|^== (중단|실패)' \
-              "logs/multi-$m.log" || echo "(측정값 없음)"
-            echo '```'
-            echo ""
-          } >> logs/summary.txt
-
       # 결과를 저장소에 남긴다. 아티팩트를 받지 않아도 되게 하려는 것이다.
       # results/ 는 push 트리거 경로에 없으므로 자기 자신을 다시 부르지 않는다.
       - name: 결과를 저장소에 기록
@@ -311,7 +237,7 @@ jobs:
             echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
             echo "- 커밋: ${GITHUB_SHA:0:8}"
             echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "- 대상: ${LIST:-(없음)}${{ inputs.model == '' && ' + resnet18-4core(4코어)' || '' }}"
+            echo "- 대상: ${LIST:-(없음)}"
             echo "- 보드 빌드: $(basename "$BOARD_BUILD")"
             echo ""
             cat logs/summary.txt 2>/dev/null || echo "(요약 없음 — 실행 전에 멈췄다)"
