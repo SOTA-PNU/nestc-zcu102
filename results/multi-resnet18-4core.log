@@ -8,16 +8,16 @@ Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1103 09:25:06.047582    24 HostManager.cpp:242] Destroying host manager...
+I1103 13:36:44.253129    24 HostManager.cpp:242] Destroying host manager...
 == 2-b단계 멀티 EVTA 번들 (코어 4개)
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1103 09:25:06.617652    32 HostManager.cpp:242] Destroying host manager...
+I1103 13:36:44.749817    32 HostManager.cpp:242] Destroying host manager...
    코어 1  mxnet_exported_resnet18_1.cpp  (마스크 2)
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1103 09:25:07.131366    35 HostManager.cpp:242] Destroying host manager...
+I1103 13:36:45.270797    35 HostManager.cpp:242] Destroying host manager...
    코어 2  mxnet_exported_resnet18_2.cpp  (마스크 4)
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1103 09:25:07.713436    38 HostManager.cpp:242] Destroying host manager...
+I1103 13:36:45.780143    38 HostManager.cpp:242] Destroying host manager...
    코어 3  mxnet_exported_resnet18_3.cpp  (마스크 8)
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 BGR, 정규화 0
@@ -25,30 +25,49 @@ I1103 09:25:07.713436    38 HostManager.cpp:242] Destroying host manager...
 "resnetv10_dense0_fwd__1"
 == 완료
 total 47140
-drwxr-xr-x 2 1000 1000     4096 Nov  3 09:25 .
-drwxr-xr-x 4 1000 1000     4096 Nov  3 09:25 ..
--rw-r--r-- 1 1000 1000    23416 Nov  3 09:25 Main.cpp
--rw-r--r-- 1 1000 1000     3762 Nov  3 09:25 VTARuntime.h
--rw-r--r-- 1 1000 1000       36 Nov  3 09:25 bundle.conf
--rw-r--r-- 1 1000 1000    26235 Nov  3 09:25 calib.yaml
--rw-r--r-- 1 1000 1000    40427 Nov  3 09:25 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1000 1000     2190 Nov  3 09:25 mxnet_exported_resnet18.h
--rw-r--r-- 1 1000 1000 12003168 Nov  3 09:25 mxnet_exported_resnet18.weights.bin
--rw-r--r-- 1 1000 1000    40465 Nov  3 09:25 mxnet_exported_resnet18_1.cpp
--rw-r--r-- 1 1000 1000     2206 Nov  3 09:25 mxnet_exported_resnet18_1.h
--rw-r--r-- 1 1000 1000 12003168 Nov  3 09:25 mxnet_exported_resnet18_1.weights.bin
--rw-r--r-- 1 1000 1000    40465 Nov  3 09:25 mxnet_exported_resnet18_2.cpp
--rw-r--r-- 1 1000 1000     2206 Nov  3 09:25 mxnet_exported_resnet18_2.h
--rw-r--r-- 1 1000 1000 12003168 Nov  3 09:25 mxnet_exported_resnet18_2.weights.bin
--rw-r--r-- 1 1000 1000    40465 Nov  3 09:25 mxnet_exported_resnet18_3.cpp
--rw-r--r-- 1 1000 1000     2206 Nov  3 09:25 mxnet_exported_resnet18_3.h
--rw-r--r-- 1 1000 1000 12003168 Nov  3 09:25 mxnet_exported_resnet18_3.weights.bin
+drwxr-xr-x 2 1000 1000     4096 Nov  3 13:36 .
+drwxr-xr-x 3 1000 1000     4096 Nov  3 13:36 ..
+-rw-r--r-- 1 1000 1000    23416 Nov  3 13:36 Main.cpp
+-rw-r--r-- 1 1000 1000     3762 Nov  3 13:36 VTARuntime.h
+-rw-r--r-- 1 1000 1000       36 Nov  3 13:36 bundle.conf
+-rw-r--r-- 1 1000 1000    26235 Nov  3 13:36 calib.yaml
+-rw-r--r-- 1 1000 1000    40427 Nov  3 13:36 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1000 1000     2190 Nov  3 13:36 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1000 1000 12003168 Nov  3 13:36 mxnet_exported_resnet18.weights.bin
+-rw-r--r-- 1 1000 1000    40465 Nov  3 13:36 mxnet_exported_resnet18_1.cpp
+-rw-r--r-- 1 1000 1000     2206 Nov  3 13:36 mxnet_exported_resnet18_1.h
+-rw-r--r-- 1 1000 1000 12003168 Nov  3 13:36 mxnet_exported_resnet18_1.weights.bin
+-rw-r--r-- 1 1000 1000    40465 Nov  3 13:36 mxnet_exported_resnet18_2.cpp
+-rw-r--r-- 1 1000 1000     2206 Nov  3 13:36 mxnet_exported_resnet18_2.h
+-rw-r--r-- 1 1000 1000 12003168 Nov  3 13:36 mxnet_exported_resnet18_2.weights.bin
+-rw-r--r-- 1 1000 1000    40465 Nov  3 13:36 mxnet_exported_resnet18_3.cpp
+-rw-r--r-- 1 1000 1000     2206 Nov  3 13:36 mxnet_exported_resnet18_3.h
+-rw-r--r-- 1 1000 1000 12003168 Nov  3 13:36 mxnet_exported_resnet18_3.weights.bin
+== vtalib 빌드
+[ 80%] Built target multi_gemm_gemm
+make[2]: Leaving directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi'
+[100%] Built target mul_performance_test
+make[1]: Leaving directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi'
+make: Leaving directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib'
+-rw-rw-r-- 1 xilinx xilinx 236580 Nov  3 09:10 /home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib/libVTABundle.a
+-rw-rw-r-- 1 xilinx xilinx 181366 Nov  3 09:10 /home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib/libvta_runtime.a
+== 버퍼 구성
+VTA_LOG_ACC_BUFF_SIZE=17
+VTA_LOG_INP_BUFF_SIZE=15
+VTA_LOG_WGT_BUFF_SIZE=18
+== 비트스트림 multi  (/home/xilinx/bitstreams/zcu102_4_1x16_i8w8a32_16_15_18_17.bit)
+   fpga operating
+   0xA0000000  ctrl=00000004
+   0xA0010000  ctrl=00000004
+   0xA0020000  ctrl=00000004
+   0xA0030000  ctrl=00000004
+== 완료  multi
 == 멀티 EVTA 번들 resnet18-4core  (코어 4개)
    mxnet_exported_resnet18_1.cpp
    mxnet_exported_resnet18_2.cpp
    mxnet_exported_resnet18_3.cpp
    mxnet_exported_resnet18.cpp
-   CMA 여유 253332 kB (필요 추정 200000 kB, 코어 4개)
+   CMA 여유 253328 kB (필요 추정 200000 kB, 코어 4개)
 == 컴파일 (번들 네 벌이라 단일보다 오래 걸린다)
 Main.cpp: In function ‘void* thread_main(void*)’:
 Main.cpp:484:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
@@ -83,7 +102,7 @@ Main.cpp:680:80: warning: ISO C++ forbids converting a string constant to ‘cha
 == 실행 (네 코어 동시)
 -- CMA 현황 --
 CmaTotal:         262144 kB
-CmaFree:          253332 kB
+CmaFree:          253328 kB
 -- 번들당 요구량 --
    mxnet_exported_resnet18_1.h              // Total data size: 606112(bytes)
    mxnet_exported_resnet18_2.h              // Total data size: 606112(bytes)
@@ -93,22 +112,22 @@ CmaFree:          253332 kB
    /home/xilinx/bundles/multi-resnet18-4core/mxnet_exported_resnet18_2.weights.bin 12003168 bytes
    /home/xilinx/bundles/multi-resnet18-4core/mxnet_exported_resnet18_3.weights.bin 12003168 bytes
    /home/xilinx/bundles/multi-resnet18-4core/mxnet_exported_resnet18.weights.bin 12003168 bytes
-/home/xilinx/board-multi-run.sh: line 176: 10249 Terminated              ( for i in $(seq 1 40);
+/home/xilinx/board-multi-run.sh: line 176:  5674 Terminated              ( for i in $(seq 1 40);
 do
     grep -i '^CmaFree' /proc/meminfo | awk '{print $2}'; sleep 3;
 done ) > /tmp/cma_samples.txt 2> /dev/null
 -- CMA 실측 --
-   실행 중 최저 여유 73632 kB
-   사용량 179700 kB  (코어당 약 44925 kB)
+   실행 중 최저 여유 74584 kB
+   사용량 178744 kB  (코어당 약 44686 kB)
 96
 97
 98
 99
 100
 100
-100
-Inference time: 4157.06ms
+101
+Inference time: 4231.68ms
 == 전부 통과
-   총 4157.06ms / 100장
-   장당 41.6ms (벽시계 기준)
-   처리량 24.06 img/s
+   총 4231.68ms / 100장
+   장당 42.3ms (벽시계 기준)
+   처리량 23.63 img/s
