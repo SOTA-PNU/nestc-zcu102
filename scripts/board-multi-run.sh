@@ -159,9 +159,20 @@ ls -l "$BUNDLE"/*.weights.bin | awk '{printf "   %-40s %s bytes\n", $NF, $5}'
   done ) > /tmp/cma_samples.txt 2>/dev/null &
 SAMPLER=$!
 
-out=$(sudo -E env PATH="$PATH" "./${MODEL_NAME}_multi" "$IMGDIR/$IMG.png" 2>&1 || true)
+# 커널 oops 수를 실행 전후로 센다. 2026-11-03 에 코어 1~3 스레드가 매번
+# SError(버스 오류)로 죽었는데, 네 스레드가 공유 카운터로 100회를 나눠
+# 가지므로 살아남은 코어 0 하나가 전부 처리해 "전부 통과" 로 찍혔다.
+# 시간 줄과 오답 0건만으로는 이 착시를 못 잡는다.
+oops_count() { sudo dmesg | grep -c 'Internal error: Oops' || true; }
+OOPS_BEFORE=$(oops_count)
+
+# 스레드가 죽으면 프로세스가 남은 스레드를 기다리며 영원히 매달린다.
+# 정상이면 10초 안에 끝나므로 5분에서 끊는다. 끊으면 CMA 가 반납되지
+# 않지만, 그 상태의 보드는 어차피 재부팅해야 한다.
+out=$(sudo -E env PATH="$PATH" timeout -s KILL 300 "./${MODEL_NAME}_multi" "$IMGDIR/$IMG.png" 2>&1 || true)
 
 kill "$SAMPLER" 2>/dev/null || true
+OOPS_AFTER=$(oops_count)
 if [ -s /tmp/cma_samples.txt ]; then
   CMA_MIN=$(sort -n /tmp/cma_samples.txt | head -1)
   CMA_BEFORE=$(cma_free_kb)
@@ -176,6 +187,12 @@ echo "$out" | tail -8
 total=$(echo "$out" | sed -n 's/^Inference time: *//p' | tail -1 | tr -d 'ms')
 wrong=$(echo "$out" | grep -c "should be" || true)
 
+if [ "$OOPS_AFTER" -gt "$OOPS_BEFORE" ]; then
+  echo "== 실패  실행 중 커널 oops $(( OOPS_AFTER - OOPS_BEFORE ))건 (SError 면 코어 접근 실패)"
+  sudo dmesg | grep -E 'SError|Comm:' | tail -8
+  echo "   보드를 재부팅해야 한다. CMA 와 VTA 상태가 정리되지 않는다."
+  exit 1
+fi
 if [ -z "$total" ]; then
   echo "== 실패  시간 줄을 찾지 못했다"
   exit 1
