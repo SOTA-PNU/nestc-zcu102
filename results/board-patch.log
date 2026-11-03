@@ -4,30 +4,30 @@
 --- 적용된 VTA_MAX_XFER ---
 45:#define VTA_MAX_XFER (1<<24)
 --- vtalib 전체 빌드 ---
-[100%] Building CXX object vta/vtalib/tests/zcu102/CMakeFiles/gemm.dir/tests/gemm.cpp.o
-/home/xilinx/nest-compiler-2024/vta/vtalib/tests/zcu102/tests/gemm.cpp: In function ‘int main()’:
-/home/xilinx/nest-compiler-2024/vta/vtalib/tests/zcu102/tests/gemm.cpp:156:25: warning: comparison between signed and unsigned integer expressions [-Wsign-compare]
-     if(input[i]*GEMM_VAL!=(uint32_t)output[i]){
-        ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/xilinx/nest-compiler-2024/vta/vtalib/tests/zcu102/tests/gemm.cpp:58:10: warning: variable ‘result’ set but not used [-Wunused-but-set-variable]
-   double result;
-          ^~~~~~
-/home/xilinx/nest-compiler-2024/vta/vtalib/tests/zcu102/tests/gemm.cpp:68:10: warning: unused variable ‘output_mid’ [-Wunused-variable]
-   int8_t output_mid[16];
-          ^~~~~~~~~~
-[100%] Linking CXX executable passed_tests/gemm
+-- Adding ResConv9Test Bundles.
+-- Adding Resnet18PartitionTest Bundles.
+-- Adding Resnet18RelayEVTAPartitionTest Bundles.
+-- TODO
+-- Adding Resnet18Test Bundles.
+-- Adding Resnet50Test Bundles.
+-- Adding Resnetv10S1C0Test Bundles.
+-- Adding SoftMax Bundles.
+-- Adding SplatMax Bundles.
+-- Adding Transpose Bundles.
+-- Adding Vgg16Cifar10Test Bundles.
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/xilinx/nest-compiler-2024/build_aarch64
+[ 25%] Built target vta_runtime
+[ 25%] Built target VTABundle
+[ 50%] Built target mul_performance_test
+[ 50%] Built target add_test
+[ 75%] Built target conv13
+[100%] Built target gemm_cnublas
+[100%] Built target gemm_gemm
 [100%] Built target gemm
-Scanning dependencies of target mul_test
-[100%] Building CXX object vta/vtalib/tests/zcu102/CMakeFiles/mul_test.dir/tests/mul_test.cpp.o
-[100%] Linking CXX executable passed_tests/mul_test
 [100%] Built target mul_test
-Scanning dependencies of target move_test
-[100%] Building CXX object vta/vtalib/tests/zcu102/CMakeFiles/move_test.dir/tests/move_test.cpp.o
-[100%] Linking CXX executable passed_tests/move_test
 [100%] Built target move_test
-Scanning dependencies of target move_performance_test
-[100%] Building CXX object vta/vtalib/tests/zcu102/CMakeFiles/move_performance_test.dir/tests/move_performance_test.cpp.o
-[100%] Linking CXX executable passed_tests/move_performance_test
 [100%] Built target move_performance_test
 --- 라이브러리 ---
 -rw-rw-r-- 1 xilinx xilinx 236580 Nov  3 09:16 libVTABundle.a
