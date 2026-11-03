@@ -15,6 +15,13 @@
 부팅 때 한 번만 깨우므로 그 뒤에 내려가면 못 일으킨다. 고장 진단은 항상
 **Settings → Actions → Runners 에서 Offline 인지 보는 것부터** 한다.
 
+17:32 에 세 번째로 Offline 이 되어(`wsl -l -v` 가 Stopped) 고쳤다. 시작
+폴더의 `wsl-runner.cmd` 를 `/bin/true` 대신 숨김 창의
+`wsl -e sleep infinity` 로 바꿔 WSL 을 상시 붙잡아 둔다. 사본은
+`scripts/windows/wsl-runner.cmd`. **아직 PC 재부팅 뒤에 실제로 붙는지는 못 봤다** —
+다음 로그인 때 `wsl -l -v` 가 Running 이고
+`pgrep -a sleep` 에 `sleep infinity` 가 있는지 본다.
+
 PC 가 Wi-Fi 라 보드로 가는 SSH 가 끊겼다. 보드에서는 빌드가 끝났는데
 세션이 안 돌아와 단계가 매달렸다. keepalive 를 60초로 줄이고 재시도
 세 번과 30분 제한을 넣었다(`c79a458`).
