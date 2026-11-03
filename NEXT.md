@@ -68,10 +68,28 @@ SError 는 비동기 버스 오류다. 단일 비트스트림에는 코어 1~3 �
 실행을 5분에서 끊는다. model-test 에 4코어를 붙였던 커밋(`02b10ec`)은
 되돌렸다(`f069258`).
 
-별개로 **SD 카드(복제본)가 상해 가고 있을 수 있다.** 17:55 재부팅 전 부팅의
-dmesg 에 부팅 17초부터 `EXT4-fs error ... bad block bitmap checksum` 과
-`mmcblk0: error -84` 가 5분 간격으로 찍혔다. VTA 와 무관하다. 검증된 다른
-복제본으로 바꿀지 판단이 필요하다.
+**SD 카드 파일시스템을 고쳤다** (2026-11-03 19:40 KST, 복제본 교체 없이 그 카드에서).
+
+증상은 둘이었다. `EXT4-fs error ... bad block bitmap checksum`(파일시스템 장부
+손상, `tune2fs` 상태 `clean with errors`, 오류 12건, 첫 오류 11/03 08:08 = 전원
+차단 직후 부팅)과 `mmcblk0: error -84`(전송 CRC 오류, 10/30~11/03 사이 간헐적,
+수리 전 부팅부터 0건, 문제 섹터도 다시 읽힌다). 앞의 것은 비정상 종료(전원 차단,
+SError oops, 추론 중 강제 종료)에서 왔고 9/22 복제 이후 fsck 를 한 번도 안 했다.
+뒤의 것은 카드 접촉·신호 쪽으로 보이나 카드 상태를 단정하지는 못했다.
+
+커널이 루트를 `rw` 로 올려 부팅 fsck 가 돌지 않으므로(부팅 인자는 안 건드린다)
+이렇게 했다: 중요 파일 백업(`backups/board-files-20261103/`, 원본 vta.bit 해시
+확인) → `swapoff` → `sysrq u`(루트 읽기 전용) → `e2fsck -fn` 으로 범위 확인 →
+`e2fsck -fy` → 재점검 exit 0 → `sysrq b` 한 번. 고친 것은 블록 공유 1건
+(logrotate 상태 파일과 그 옛 판), 떨어진 inode 2개(Jupyter 런타임 JSON, 옛
+logrotate 상태 → lost+found), 링크 수 1건(syslog.7.gz), 비트맵·여유 블록 수.
+지워진 데이터는 없다. 로그는 `backups/board-files-20261103/fsck-20261103.log`.
+
+수리 후: 상태 `clean`, 부팅·4코어 작업 뒤에도 EXT4/mmc 오류와 oops 0건.
+
+**재발 방지.** 전원을 그냥 끊지 않는다. 커널 oops 나 전원 차단을 겪은 뒤에는 같은
+방법으로 `e2fsck -fn` 부터 본다. `mmcblk0: error -84` 가 다시 늘면 카드를
+의심한다.
 
 오늘 세 번 막혔는데 전부 보드가 아니라 러너 쪽이었다.
 

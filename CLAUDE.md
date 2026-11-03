@@ -123,6 +123,10 @@ dat_queue.h:39: Check failed: fpga_buff_ != nullptr
 ssh -p 25022 xilinx@sota.pusan.ac.kr 'sudo reboot'
 ```
 
+**전원 차단이나 커널 oops 뒤에는 파일시스템을 의심한다.** 2026-11-03 에 블록
+비트맵이 깨져 있었다. 루트가 `rw` 로 올라와 부팅 fsck 가 돌지 않으므로 `swapoff`
+→ `sysrq u` → `e2fsck -fn`/`-fy` → `sysrq b` 로 그 카드에서 고쳤다(`NEXT.md` 0절).
+
 **재부팅 명령을 두 번 보내지 않는다.** 부팅 도중에 겹치면 보드가 네트워크에서
 사라져 전원을 껐다 켜야 한다(2026-11-03 에 겪었다). 90초 기다렸다가
 `grep CmaFree /proc/meminfo` 로 확인한다. 25만 kB 근처면 정상이다.
