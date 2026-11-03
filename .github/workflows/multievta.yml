@@ -9,6 +9,12 @@ name: multievta
 # 모델 기술서는 models-multi/ 아래에 둔다. models/ 와 분리한 이유는
 # 판정 방식이 다르기 때문이다 — 라벨 비교가 아니라 "틀린 추론 0건 + 총 시간" 이다.
 #
+# 2026-11-03 정정: 부팅 기본 비트스트림(vta.bit)은 단일 VTA 였다. 그 위에서
+# 코어 1~3 스레드가 SError 로 죽고 코어 0 혼자 100장을 처리해 "통과" 로 찍혔다.
+# 지금은 ETRI 의 4코어 비트스트림을 올리고(board-bitstream.sh multi) 멀티 구성
+# 런타임(build_aarch64_multi, board-setup-multi.sh)으로 링크한다. 끝나면 단일로
+# 되돌린다. 판정에 "커널 oops 0건" 이 더해졌다.
+#
 # 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
 
 on:
@@ -17,6 +23,8 @@ on:
     paths:
       - "models-multi/**"
       - "scripts/board-multi-run.sh"
+      - "scripts/board-bitstream.sh"
+      - "scripts/board-setup-multi.sh"
       - ".github/workflows/multievta.yml"
   workflow_dispatch:
     inputs:
@@ -146,8 +154,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p logs
-          scp scripts/board-multi-run.sh board:/home/xilinx/board-multi-run.sh
-          ssh board "chmod +x /home/xilinx/board-multi-run.sh"
+          scp scripts/board-multi-run.sh scripts/board-bitstream.sh scripts/board-setup-multi.sh \
+            board:/home/xilinx/
+          ssh board "chmod +x /home/xilinx/board-*.sh"
+          MULTI_BUILD="$BOARD_SRC/build_aarch64_multi"
+          # 멀티 구성 런타임을 짓고(증분) 4코어 비트스트림을 올린다.
+          ssh board "set -eu
+            /home/xilinx/board-setup-multi.sh $BOARD_SRC
+            /home/xilinx/board-bitstream.sh multi" 2>&1 | tee logs/multi-setup.log
 
           : > logs/summary.txt
           FAILED=0
@@ -171,7 +185,7 @@ jobs:
               ssh board "set -eu
                 export PATH=\$HOME/bin:\$PATH
                 /home/xilinx/board-multi-run.sh --bundle $BB \
-                  --src $BOARD_SRC --build $BOARD_BUILD"
+                  --src $BOARD_SRC --build $MULTI_BUILD"
             } 2>&1 | tee "logs/multi-$m.log" || true
 
             if grep -q '^== 전부 통과' "logs/multi-$m.log"; then
@@ -183,7 +197,7 @@ jobs:
               echo "### $m — $V"
               echo ""
               echo '```'
-              grep -E '^   (총|장당|처리량|코어)|^Cma|CMA 현황|fpga_buff_|Check failed' \
+              grep -E '^   (총|장당|처리량|코어|사용량|실행 중)|^Cma|CMA 현황|fpga_buff_|Check failed|^== (중단|실패)' \
                 "logs/multi-$m.log" || echo "(측정값 없음)"
               echo '```'
               echo ""
@@ -191,6 +205,14 @@ jobs:
             echo "::endgroup::"
           done
           echo "FAILED=$FAILED" >> "$GITHUB_ENV"
+
+      # 어떻게 끝났든 단일 비트스트림으로 되돌린다. model-test 의 단일 코어
+      # 기준값은 단일 비트스트림에서 잰 것이다.
+      - name: 비트스트림 되돌리기
+        if: always()
+        run: |
+          ssh board "test -x /home/xilinx/board-bitstream.sh && /home/xilinx/board-bitstream.sh single" || \
+            echo "::warning::단일 비트스트림으로 되돌리지 못했다. 보드를 재부팅하면 rc.local 이 되돌린다."
 
       - name: 결과를 저장소에 기록
         if: always()

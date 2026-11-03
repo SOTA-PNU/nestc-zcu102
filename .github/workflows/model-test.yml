@@ -9,6 +9,12 @@ name: model-test
 # board-test 가 상류 테스트의 회귀를 막는 장치라면, 이쪽은 우리가 올리는
 # 모델을 위한 것이다. 모델 하나는 models/<이름>.conf 하나로 기술한다.
 #
+# 단일 코어 모델 다음에 4코어 멀티 EVTA(models-multi/resnet18-4core)도 돌린다.
+# 비트스트림이 다르다 — 단일은 부팅 기본 vta.bit, 4코어는 ETRI 의
+# zcu102_4_1x16_i8w8a32_16_15_18_17.bit 와 build_aarch64_multi(버퍼 15/18/17).
+# scripts/board-bitstream.sh 가 갈아 끼우고, 끝나면 항상 단일로 되돌린다.
+# 2026-11-03 실측: 4코어 23.58 img/s, 2코어 18.23, 단일 10.9.
+#
 # 러너는 PC(WSL x64) 의 self-hosted 다. 보드는 Ubuntu 18.04(glibc 2.27)라
 # Node 20 기반 액션이 돌지 않고 가용 메모리도 615MB 뿐이다.
 #
@@ -25,6 +31,10 @@ on:
       - "ci/**"
       - "scripts/gen-bundle.sh"
       - "scripts/board-build-run.sh"
+      - "scripts/board-bitstream.sh"
+      - "scripts/board-setup-multi.sh"
+      - "scripts/board-multi-run.sh"
+      - "models-multi/resnet18-4core.conf"
       - ".github/workflows/model-test.yml"
   workflow_dispatch:
     inputs:
@@ -185,8 +195,11 @@ jobs:
         run: |
           set -eu
           mkdir -p logs
-          scp scripts/board-build-run.sh board:/home/xilinx/board-build-run.sh
-          ssh board "chmod +x /home/xilinx/board-build-run.sh"
+          scp scripts/board-build-run.sh scripts/board-bitstream.sh board:/home/xilinx/
+          ssh board "chmod +x /home/xilinx/board-build-run.sh /home/xilinx/board-bitstream.sh"
+          # 단일 코어 기준값은 단일 비트스트림에서 잰 것이다. 앞선 실행이
+          # 4코어 비트스트림을 남겨 두었을 수도 있으니 매번 맞춘다.
+          ssh board "/home/xilinx/board-bitstream.sh single"
 
           : > logs/summary.txt
           HARD_FAIL=0
@@ -243,6 +256,66 @@ jobs:
 
           echo "HARD_FAIL=$HARD_FAIL" >> "$GITHUB_ENV"
 
+      # 4코어 비트스트림을 올리고 멀티 구성 런타임으로 돌린다. 단일 코어 모델
+      # 뒤에 두는 이유는, 4코어가 잘못되더라도 단일 코어 판정은 이미 끝나 있게
+      # 하려는 것이다. 판정은 "커널 oops 0건 + 틀린 추론 0건 + 시간 줄" 이다
+      # (board-multi-run.sh). 한 모델만 골라 돌릴 때(inputs.model)는 건너뛴다.
+      - name: 4코어 멀티 EVTA
+        if: ${{ inputs.model == '' }}
+        run: |
+          set -euo pipefail
+          m=resnet18-4core
+          CONF="models-multi/$m.conf"
+          OUT="$GITHUB_WORKSPACE/multi-out/$m"
+          BB="/home/xilinx/bundles/multi-$m"
+          MULTI_BUILD="$BOARD_SRC/build_aarch64_multi"
+          scp scripts/board-multi-run.sh scripts/board-bitstream.sh scripts/board-setup-multi.sh \
+            board:/home/xilinx/
+          ssh board "chmod +x /home/xilinx/board-*.sh"
+          rm -rf "$OUT"; mkdir -p "$OUT"
+          {
+            docker run --rm --user "$(id -u):$(id -g)" \
+              -v "$NESTC_UPSTREAM":/src -v "$GITHUB_WORKSPACE":/work -w /work \
+              "$DOCKER_IMAGE" \
+              bash scripts/gen-bundle.sh --conf "$CONF" \
+                --tools "$TOOLS_IN_CONTAINER" --upstream /src \
+                --out "/work/multi-out/$m"
+
+            ssh board "mkdir -p $BB"
+            scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf board:"$BB/"
+
+            ssh board "set -eu
+              export PATH=\$HOME/bin:\$PATH
+              /home/xilinx/board-setup-multi.sh $BOARD_SRC
+              /home/xilinx/board-bitstream.sh multi
+              /home/xilinx/board-multi-run.sh --bundle $BB \
+                --src $BOARD_SRC --build $MULTI_BUILD"
+          } 2>&1 | tee "logs/multi-$m.log" || true
+
+          if grep -q '^== 전부 통과' "logs/multi-$m.log"; then
+            V="통과"
+          else
+            V="실패"
+            echo "HARD_FAIL=1" >> "$GITHUB_ENV"
+          fi
+          {
+            echo "### $m — $V"
+            echo ""
+            echo '```'
+            grep -E '^   (총|장당|처리량|사용량|실행 중)|fpga_buff_|Check failed|^== (중단|실패)' \
+              "logs/multi-$m.log" || echo "(측정값 없음)"
+            echo '```'
+            echo ""
+          } >> logs/summary.txt
+
+      # 4코어가 어떻게 끝났든 단일 비트스트림으로 되돌린다. VTA 를 쓰는
+      # 프로세스가 남아 있으면 board-bitstream.sh 가 스스로 거절한다.
+      - name: 비트스트림 되돌리기
+        if: always()
+        run: |
+          ssh board "test -x /home/xilinx/board-bitstream.sh && /home/xilinx/board-bitstream.sh single" || \
+            echo "::warning::단일 비트스트림으로 되돌리지 못했다. 보드를 재부팅하면 rc.local 이 되돌린다."
+
       # 결과를 저장소에 남긴다. 아티팩트를 받지 않아도 되게 하려는 것이다.
       # results/ 는 push 트리거 경로에 없으므로 자기 자신을 다시 부르지 않는다.
       - name: 결과를 저장소에 기록
@@ -256,7 +329,7 @@ jobs:
             echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
             echo "- 커밋: ${GITHUB_SHA:0:8}"
             echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "- 대상: ${LIST:-(없음)}"
+            echo "- 대상: ${LIST:-(없음)}${{ inputs.model == '' && ' + resnet18-4core(4코어)' || '' }}"
             echo "- 보드 빌드: $(basename "$BOARD_BUILD")"
             echo ""
             cat logs/summary.txt 2>/dev/null || echo "(요약 없음 — 실행 전에 멈췄다)"

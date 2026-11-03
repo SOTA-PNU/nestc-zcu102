@@ -9,6 +9,12 @@ name: multievta
 # 모델 기술서는 models-multi/ 아래에 둔다. models/ 와 분리한 이유는
 # 판정 방식이 다르기 때문이다 — 라벨 비교가 아니라 "틀린 추론 0건 + 총 시간" 이다.
 #
+# 2026-11-03 정정: 부팅 기본 비트스트림(vta.bit)은 단일 VTA 였다. 그 위에서
+# 코어 1~3 스레드가 SError 로 죽고 코어 0 혼자 100장을 처리해 "통과" 로 찍혔다.
+# 지금은 ETRI 의 4코어 비트스트림을 올리고(board-bitstream.sh multi) 멀티 구성
+# 런타임(build_aarch64_multi, board-setup-multi.sh)으로 링크한다. 끝나면 단일로
+# 되돌린다. 판정에 "커널 oops 0건" 이 더해졌다.
+#
 # 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
 
 on:
@@ -17,6 +23,8 @@ on:
     paths:
       - "models-multi/**"
       - "scripts/board-multi-run.sh"
+      - "scripts/board-bitstream.sh"
+      - "scripts/board-setup-multi.sh"
       - ".github/workflows/multievta.yml"
   workflow_dispatch:
     inputs:
@@ -96,14 +104,64 @@ jobs:
           docker run --rm -v "$UP":/root/nestc -w /root/nestc/build \
             "$DOCKER_IMAGE" ninja model-compiler image-classifier
 
+      # 보드 쪽 런타임(vtalib)에 우리 패치를 적용한다.
+      #   patch_relu_rescale.py   독립 ReLU 재양자화의 int8 포화 복원
+      #   patch_vta_max_xfer.py   명령 큐를 32MB -> 16MB 로. 네 코어가 CMA 에
+      #                           들어가게 하는 것이다. 근거는 그 파일 머리에.
+      # 컴파일러 패치와 달리 이쪽은 보드에서 빌드해야 한다. make 는 증분이라
+      # 바뀐 것이 없으면 금방 끝난다.
+      #
+      # VTABundle 하나만 짓지 않고 vta/vtalib 디렉터리를 통째로 짓는다.
+      # VTA_MAX_XFER 는 driver.h 와 cmd_queue.h 에 걸쳐 있어 런타임
+      # 라이브러리(libvta_runtime.a)도 같이 다시 지어야 하기 때문이다.
+      - name: 보드 런타임 패치 적용 및 재빌드
+        timeout-minutes: 30
+        run: |
+          # pipefail 이 없으면 tee/tail 의 종료 코드만 보게 되어
+          # 보드 빌드가 실패해도 조용히 통과한다.
+          set -euo pipefail
+          mkdir -p logs
+          # 러너가 Wi-Fi 라 SSH 가 중간에 끊기는 일이 있다. 2026-11-03 에
+          # 보드에서는 빌드가 다 끝났는데 세션이 안 돌아와 단계가 매달렸다.
+          # 패치는 멱등하고 make 는 증분이라 다시 돌려도 안전하다.
+          for try in 1 2 3; do
+            [ "$try" = 1 ] || echo "== SSH 재시도 $try"
+          scp ci/patch_relu_rescale.py ci/patch_vta_max_xfer.py board:/home/xilinx/
+          ssh board "set -euo pipefail
+            python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
+            python3 /home/xilinx/patch_vta_max_xfer.py /home/xilinx/nest-compiler-2024
+            echo '--- 적용된 VTA_MAX_XFER ---'
+            grep -n 'define VTA_MAX_XFER' \
+              /home/xilinx/nest-compiler-2024/vta/vtalib/include/zcu102/vta/driver.h
+            cd $BOARD_BUILD/vta/vtalib
+            echo '--- vtalib 전체 빌드 ---'
+            make -j1 2>&1 | tail -25
+            echo '--- 라이브러리 ---'
+            ls -l libVTABundle.a libvta_runtime.a
+            echo '--- 소스에 ReLU 패치 표식 ---'
+            grep -c nestc_relu_rescale_patch \
+              /home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_generic.cpp
+            echo '--- 라이브러리에 ReLU 패치 표식 (0 이면 재빌드 안 된 것) ---'
+            strings libVTABundle.a | grep -c nestc_relu || true" \
+            2>&1 | tee logs/board-patch.log && break
+            [ "$try" = 3 ] && { echo "SSH 가 세 번 다 실패했다"; exit 1; }
+            sleep 20
+          done
+
       # 네 코어를 동시에 열므로 단일 코어보다 메모리도 네 배 쓴다.
       # ResNet-18 가중치가 12MB 라 네 벌이면 48MB — 보드 여유(1.1GB) 안이다.
       - name: 번들 생성과 보드 실행
         run: |
           set -euo pipefail
           mkdir -p logs
-          scp scripts/board-multi-run.sh board:/home/xilinx/board-multi-run.sh
-          ssh board "chmod +x /home/xilinx/board-multi-run.sh"
+          scp scripts/board-multi-run.sh scripts/board-bitstream.sh scripts/board-setup-multi.sh \
+            board:/home/xilinx/
+          ssh board "chmod +x /home/xilinx/board-*.sh"
+          MULTI_BUILD="$BOARD_SRC/build_aarch64_multi"
+          # 멀티 구성 런타임을 짓고(증분) 4코어 비트스트림을 올린다.
+          ssh board "set -eu
+            /home/xilinx/board-setup-multi.sh $BOARD_SRC
+            /home/xilinx/board-bitstream.sh multi" 2>&1 | tee logs/multi-setup.log
 
           : > logs/summary.txt
           FAILED=0
@@ -127,7 +185,7 @@ jobs:
               ssh board "set -eu
                 export PATH=\$HOME/bin:\$PATH
                 /home/xilinx/board-multi-run.sh --bundle $BB \
-                  --src $BOARD_SRC --build $BOARD_BUILD"
+                  --src $BOARD_SRC --build $MULTI_BUILD"
             } 2>&1 | tee "logs/multi-$m.log" || true
 
             if grep -q '^== 전부 통과' "logs/multi-$m.log"; then
@@ -139,7 +197,7 @@ jobs:
               echo "### $m — $V"
               echo ""
               echo '```'
-              grep -E '^   (총|장당|처리량|코어)|^Cma|CMA 현황|fpga_buff_|Check failed' \
+              grep -E '^   (총|장당|처리량|코어|사용량|실행 중)|^Cma|CMA 현황|fpga_buff_|Check failed|^== (중단|실패)' \
                 "logs/multi-$m.log" || echo "(측정값 없음)"
               echo '```'
               echo ""
@@ -147,6 +205,14 @@ jobs:
             echo "::endgroup::"
           done
           echo "FAILED=$FAILED" >> "$GITHUB_ENV"
+
+      # 어떻게 끝났든 단일 비트스트림으로 되돌린다. model-test 의 단일 코어
+      # 기준값은 단일 비트스트림에서 잰 것이다.
+      - name: 비트스트림 되돌리기
+        if: always()
+        run: |
+          ssh board "test -x /home/xilinx/board-bitstream.sh && /home/xilinx/board-bitstream.sh single" || \
+            echo "::warning::단일 비트스트림으로 되돌리지 못했다. 보드를 재부팅하면 rc.local 이 되돌린다."
 
       - name: 결과를 저장소에 기록
         if: always()
