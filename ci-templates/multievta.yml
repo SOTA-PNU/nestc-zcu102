@@ -75,8 +75,8 @@ jobs:
             Port ${{ secrets.BOARD_PORT }}
             User ${{ secrets.BOARD_USER }}
             IdentityFile ~/.ssh/board_key
-            ServerAliveInterval 60
-            ServerAliveCountMax 10
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
             StrictHostKeyChecking accept-new
           EOF
           chmod 600 ~/.ssh/config

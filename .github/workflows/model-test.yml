@@ -95,8 +95,8 @@ jobs:
             Port ${{ secrets.BOARD_PORT }}
             User ${{ secrets.BOARD_USER }}
             IdentityFile ~/.ssh/board_key
-            ServerAliveInterval 60
-            ServerAliveCountMax 10
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
             StrictHostKeyChecking accept-new
           EOF
           chmod 600 ~/.ssh/config
@@ -145,11 +145,17 @@ jobs:
       # VTA_MAX_XFER 는 driver.h 와 cmd_queue.h 에 걸쳐 있어 런타임
       # 라이브러리(libvta_runtime.a)도 같이 다시 지어야 하기 때문이다.
       - name: 보드 런타임 패치 적용 및 재빌드
+        timeout-minutes: 30
         run: |
           # pipefail 이 없으면 tee/tail 의 종료 코드만 보게 되어
           # 보드 빌드가 실패해도 조용히 통과한다.
           set -euo pipefail
           mkdir -p logs
+          # 러너가 Wi-Fi 라 SSH 가 중간에 끊기는 일이 있다. 2026-11-03 에
+          # 보드에서는 빌드가 다 끝났는데 세션이 안 돌아와 단계가 매달렸다.
+          # 패치는 멱등하고 make 는 증분이라 다시 돌려도 안전하다.
+          for try in 1 2 3; do
+            [ "$try" = 1 ] || echo "== SSH 재시도 $try"
           scp ci/patch_relu_rescale.py ci/patch_vta_max_xfer.py board:/home/xilinx/
           ssh board "set -euo pipefail
             python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
@@ -167,7 +173,10 @@ jobs:
               /home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_generic.cpp
             echo '--- 라이브러리에 ReLU 패치 표식 (0 이면 재빌드 안 된 것) ---'
             strings libVTABundle.a | grep -c nestc_relu || true" \
-            2>&1 | tee logs/board-patch.log
+            2>&1 | tee logs/board-patch.log && break
+            [ "$try" = 3 ] && { echo "SSH 가 세 번 다 실패했다"; exit 1; }
+            sleep 20
+          done
 
       # 이 단계에서 VTA 가 열린다. 워크플로를 취소하면 보드가
       # 재부팅 전까지 사용 불가 상태가 될 수 있다.
