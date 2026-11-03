@@ -80,6 +80,9 @@ vta/vtalib/include/zcu102/cmd_queue.h:581   InsnQueue<VTA_MAX_XFER, ...>
 
 `ci/patch_vta_max_xfer.py` 가 `1<<24` 로 낮춘다. 코어당 44.6MB 가 되어 네
 코어가 178MB 로 CMA 256MB 에 들어간다. **부팅 인자를 건드릴 필요가 없다.**
+2026-11-03 실측으로 확인했다: 코어당 44,816 kB, 4코어 100장 9386ms
+(10.65 img/s), 오답 0, CMA 전부 반납. 처리량은 1·2·4코어가 모두 초당
+11장 안팎이다.
 
 **SqueezeNet 오답(905/904/533)은 종결했다.** 원인을 못 찾았다. `models/`
 에서 빼 `models-off/` 로 옮겼다. 배제한 것과 근거는
