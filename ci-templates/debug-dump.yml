@@ -15,9 +15,9 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "models/ 아래 conf 이름 (확장자 제외)"
+        description: "models/ 또는 models-off/ 아래 conf 이름 (확장자 제외)"
         type: string
-        default: squeezenet
+        default: resnet18
 
 concurrency:
   group: zcu102-board
@@ -84,7 +84,7 @@ jobs:
             -e INSTRUMENT_DEBUG=1 \
             -v "$NESTC_UPSTREAM":/src -v "$GITHUB_WORKSPACE":/work -w /work \
             "$DOCKER_IMAGE" \
-            bash scripts/gen-bundle.sh --conf "models/$MODEL.conf" \
+            bash scripts/gen-bundle.sh --conf "$(ls models/$MODEL.conf models-off/$MODEL.conf 2>/dev/null | head -1)" \
               --tools "$TOOLS_IN_CONTAINER" --upstream /src \
               --out "/work/debug-out/$MODEL" 2>&1 | tee "logs/gen-$MODEL.log"
           ls -la "$OUT"
