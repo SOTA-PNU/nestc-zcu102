@@ -236,8 +236,19 @@ jobs:
           git add results/
           git diff --cached --quiet && { echo "변화 없음"; exit 0; }
           git commit -m "결과: multievta ${GITHUB_RUN_ID} [skip ci]"
-          git pull --rebase --autostash origin main || true
-          git push origin HEAD:main
+          # model-test 와 multievta 가 같은 results/ 파일(board-patch.log 등)을 쓴다.
+          # 2026-11-03 에 rebase 가 충돌했는데 `|| true` 가 삼켜 push 가 "변경 없음"
+          # 으로 성공하고 결과가 사라졌다. 충돌하면 이 실행의 것을 남긴다(-X theirs
+          # 는 rebase 에서 다시 얹는 쪽, 즉 이 커밋이다). 끝내 못 올리면 실패시킨다.
+          for try in 1 2 3; do
+            git fetch -q origin main
+            if ! git rebase -X theirs origin/main; then
+              git rebase --abort; echo "rebase 실패"; exit 1
+            fi
+            git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          echo "결과를 세 번 다 올리지 못했다"; exit 1
 
       - name: 로그 업로드
         if: always()

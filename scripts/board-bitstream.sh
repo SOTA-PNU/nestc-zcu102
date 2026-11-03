@@ -34,9 +34,11 @@ case "$MODE" in
   *) sed -n '2,6p' "$0" >&2; exit 2 ;;
 esac
 
-if pgrep -f '_multi |/bundles/' >/dev/null 2>&1; then
-  echo "== 중단  VTA 를 쓰는 프로세스가 있다. 비트스트림을 바꾸지 않는다." >&2
-  pgrep -af '_multi |/bundles/' >&2 || true
+# VTA 런타임은 cma_alloc 으로 /dev/xlnk 를 연다. 명령줄로 찾으면 이 스크립트를
+# 부른 ssh 셸 자신(인자에 /bundles/ 가 들어 있다)이 걸려 오판한다(2026-11-03).
+if sudo fuser /dev/xlnk >/dev/null 2>&1; then
+  echo "== 중단  /dev/xlnk 를 연 프로세스가 있다(VTA 사용 중). 비트스트림을 바꾸지 않는다." >&2
+  sudo fuser -v /dev/xlnk >&2 || true
   exit 1
 fi
 
