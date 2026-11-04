@@ -159,8 +159,9 @@ ssh -p 25022 xilinx@sota.pusan.ac.kr 'sudo reboot'
 러너는 **연구실 서버 `sota-AIP`(192.168.1.150) 의 `ehdgns` 계정**에 있다
 (2026-11-04 이전, 이름 `sota-aip`, systemd 서비스라 재부팅해도 뜬다). CI 가
 큐에만 쌓이면 Actions → Settings → Runners 에서 Offline 인지 먼저 본다.
-접속은 개인 PC WSL 의 `ssh lab`(키 `~/.ssh/id_ed25519`, 교내망 밖이면
-`ssh -p 25622 ehdgns@sota.pusan.ac.kr`).
+접속은 개인 PC WSL 의 `ssh lab`(키 `~/.ssh/id_ed25519`, 외부 경로
+`sota.pusan.ac.kr:25622`). 개인 PC 가 유선(10.126.x)이면 `192.168.1.x` 내부망에
+안 닿으므로 외부 경로가 기본이다. 같은 공유기 Wi-Fi 일 때만 `ssh lab-lan`.
 
 ```sh
 ssh lab 'cd ~/actions-runner && sudo ./svc.sh status'
