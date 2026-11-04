@@ -223,12 +223,14 @@ else
   # 보드에서 Main.cpp 가 직접 하는 것. 둘이 어긋나면 양자화 스케일과 실제
   # 입력이 맞지 않아 조용히 틀린 답이 나온다. 그래서 여기서 맞춰 준다.
   #
-  # 틀(ResNet-18 용)은 0~255 범위에 RGB→BGR 뒤집기를 하고 정규화는 없다.
+  # 틀(ResNet-18 용)은 0~255 범위에 정규화가 없고, 네트워크에 RGB 로 넣는다.
+  # (PNG 를 읽을 때 BGR 로 담았다가 2 - z 로 다시 뒤집으므로 결과는 RGB.
+  #  2026-11-04 까지 이 주석과 CHANNEL_ORDER 의 뜻이 거꾸로 적혀 있었다.)
   RANGE_MAX=255.0
   [ "$IMAGE_MODE" = "0to1" ] && RANGE_MAX=1.0
 
   MAIN_PY_BASE="$BASE" MAIN_PY_OUT="$OUTPUT_NAME" \
-  MAIN_PY_RANGE="$RANGE_MAX" MAIN_PY_ORDER="${CHANNEL_ORDER:-BGR}" \
+  MAIN_PY_RANGE="$RANGE_MAX" MAIN_PY_ORDER="${CHANNEL_ORDER:-RGB}" \
   MAIN_PY_NORM="$USE_IMAGENET_NORMALIZATION" \
   MAIN_PY_LAYOUT="$IMAGE_LAYOUT" MAIN_PY_INPUT="$INPUT_NAME" \
   MAIN_PY_EXPECT="${MULTI_EXPECT:-}" \
@@ -264,8 +266,10 @@ if old not in t:
     sys.exit("틀에서 range 를 찾지 못했다")
 t = t.replace(old, "std::pair<float, float> range = std::make_pair(0., %s);" % rng)
 
-# 2) 채널 순서. 틀은 BGR 로 뒤집는다.
-if order.upper() == "RGB":
+# 2) 채널 순서 = 네트워크에 실제로 들어가는 순서. 틀은 RGB 를 넣는다.
+#    BGR 이면 마지막 뒤집기(2 - z)를 없앤다. image-classifier 의 기본값이
+#    BGR 이라 Caffe2 계열(ResNet-50)은 BGR 이어야 보정과 맞는다.
+if order.upper() == "BGR":
     old = "resultT[getXYZW(resultDims, n, 2 - z, x, y)] ="
     if old not in t:
         sys.exit("틀에서 채널 변환을 찾지 못했다")
@@ -305,7 +309,7 @@ open(dst, "w", encoding="utf-8").write(t)
 PYEOF
 
   echo "   main   틀에서 생성 (접두사 $BASE, 출력 $OUTPUT_NAME)"
-  echo "          범위 0~$RANGE_MAX, 채널 ${CHANNEL_ORDER:-BGR}, 정규화 $USE_IMAGENET_NORMALIZATION, 레이아웃 $IMAGE_LAYOUT"
+  echo "          범위 0~$RANGE_MAX, 채널 ${CHANNEL_ORDER:-RGB}, 정규화 $USE_IMAGENET_NORMALIZATION, 레이아웃 $IMAGE_LAYOUT"
 fi
 
 # OUTPUT_NAME 을 잘못 적으면 추론은 되는데 결과를 못 읽는다.
