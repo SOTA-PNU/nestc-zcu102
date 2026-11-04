@@ -1,11 +1,11 @@
 == vtalib 빌드
-[ 80%] Built target multi_gemm_gemm
+make[2]: Entering directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi'
 make[2]: Leaving directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi'
 [100%] Built target mul_performance_test
 make[1]: Leaving directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi'
 make: Leaving directory '/home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib'
--rw-rw-r-- 1 xilinx xilinx 236580 Nov  3 09:10 /home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib/libVTABundle.a
--rw-rw-r-- 1 xilinx xilinx 181366 Nov  3 09:10 /home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib/libvta_runtime.a
+-rw-rw-r-- 1 xilinx xilinx 236580 Nov  4 09:41 /home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib/libVTABundle.a
+-rw-rw-r-- 1 xilinx xilinx 181366 Nov  4 09:40 /home/xilinx/nest-compiler-2024/build_aarch64_multi/vta/vtalib/libvta_runtime.a
 == 버퍼 구성
 VTA_LOG_ACC_BUFF_SIZE=17
 VTA_LOG_INP_BUFF_SIZE=15
