@@ -230,10 +230,10 @@ else
   MAIN_PY_BASE="$BASE" MAIN_PY_OUT="$OUTPUT_NAME" \
   MAIN_PY_RANGE="$RANGE_MAX" MAIN_PY_ORDER="${CHANNEL_ORDER:-BGR}" \
   MAIN_PY_NORM="$USE_IMAGENET_NORMALIZATION" \
-  MAIN_PY_LAYOUT="$IMAGE_LAYOUT" \
+  MAIN_PY_LAYOUT="$IMAGE_LAYOUT" MAIN_PY_INPUT="$INPUT_NAME" \
   MAIN_PY_EXPECT="${MULTI_EXPECT:-}" \
   python3 - "$TMPL" "$OUT/Main.cpp" <<'PYEOF'
-import os, sys
+import os, re, sys
 src, dst = sys.argv[1], sys.argv[2]
 base  = os.environ["MAIN_PY_BASE"]
 out   = os.environ["MAIN_PY_OUT"]
@@ -244,6 +244,13 @@ norm  = os.environ["MAIN_PY_NORM"] == "1"
 t = open(src, encoding="utf-8").read()
 t = t.replace("mxnet_exported_resnet18", base)
 t = t.replace("resnetv10_dense0_fwd__1", out)
+
+# 입력 심볼. 틀은 ResNet-18 의 "data" 를 박아 두었다. 번들 심볼 표는 ONNX
+# 입력 이름의 '/' 등을 '_' 로 바꾼 것이다(gpu_0/data_0 -> gpu_0_data_0).
+# 이름이 틀리면 getMutableWeightVar 가 실패해 추론 전에 죽고, 죽으면서
+# CMA 를 반납하지 않는다(2026-11-04 ResNet-50 첫 실행에서 98MB 샜다).
+insym = re.sub(r"[^A-Za-z0-9_]", "_", os.environ["MAIN_PY_INPUT"])
+t = re.sub(r'(initMutableWeightVars\([A-Za-z0-9_]+_config, )"data"\)', r'\1"%s")' % insym, t)
 
 # 멀티 EVTA 틀은 기대 라벨 281 이 네 군데 박혀 있다. conf 값으로 바꾼다.
 exp = os.environ.get("MAIN_PY_EXPECT", "")
