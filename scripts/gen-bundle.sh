@@ -230,6 +230,7 @@ else
   MAIN_PY_BASE="$BASE" MAIN_PY_OUT="$OUTPUT_NAME" \
   MAIN_PY_RANGE="$RANGE_MAX" MAIN_PY_ORDER="${CHANNEL_ORDER:-BGR}" \
   MAIN_PY_NORM="$USE_IMAGENET_NORMALIZATION" \
+  MAIN_PY_LAYOUT="$IMAGE_LAYOUT" \
   MAIN_PY_EXPECT="${MULTI_EXPECT:-}" \
   python3 - "$TMPL" "$OUT/Main.cpp" <<'PYEOF'
 import os, sys
@@ -283,11 +284,21 @@ if norm:
 """
     t = t.replace(anchor, block + anchor)
 
+# 4) 입력 레이아웃. 틀은 NCHW 로 읽은 뒤 `#define NHWC 1` 로 NHWC 로 바꿔
+#    넣는다(ResNet-18 은 입력이 NHWC). 입력이 NCHW 인 모델(ResNet-50 등)은
+#    번들이 안에서 직접 전치하므로 main 이 바꾸면 이미지가 뒤섞인다.
+if os.environ.get("MAIN_PY_LAYOUT", "NHWC").upper() == "NCHW":
+    old = "#define NHWC 1"
+    if old in t:
+        t = t.replace(old, "#define NHWC 0")
+    elif "transpose(inputT" in t:
+        sys.exit("틀이 입력을 전치하는데 NHWC 정의를 찾지 못했다")
+
 open(dst, "w", encoding="utf-8").write(t)
 PYEOF
 
   echo "   main   틀에서 생성 (접두사 $BASE, 출력 $OUTPUT_NAME)"
-  echo "          범위 0~$RANGE_MAX, 채널 ${CHANNEL_ORDER:-BGR}, 정규화 $USE_IMAGENET_NORMALIZATION"
+  echo "          범위 0~$RANGE_MAX, 채널 ${CHANNEL_ORDER:-BGR}, 정규화 $USE_IMAGENET_NORMALIZATION, 레이아웃 $IMAGE_LAYOUT"
 fi
 
 # OUTPUT_NAME 을 잘못 적으면 추론은 되는데 결과를 못 읽는다.
