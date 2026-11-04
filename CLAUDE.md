@@ -12,7 +12,8 @@ ETRI 의 NEST-C 컴파일러로 ZCU102 보드의 VTA/EVTA NPU 에 모델을 올�
 | 프롬프트 | 기계 | 역할 |
 |---|---|---|
 | `xilinx@pynq:~$` | ZCU102 보드 (aarch64, Ubuntu 18.04) | 추론을 실행한다 |
-| `ehdgns@ehdgns:~$` | 개인 PC 의 WSL (Ubuntu 22.04) | 지금의 CI 러너 |
+| `ehdgns@sota-AIP:~$` | **연구실 서버** 192.168.1.150 (Ubuntu 24.04, 24코어) | **CI 러너 `sota-aip`** (2026-11-04~) |
+| `ehdgns@ehdgns:~$` | 개인 PC 의 WSL (Ubuntu 22.04) | 예전 러너(해제함). 서버 접속 키가 여기 있다 |
 | `PS C:\...>` | 개인 PC 의 윈도우 | git 푸시, 파일 관리 |
 | `sota@vcu118-dev:~$` | 연구실 VirtualBox 게스트 | **CI 서버 후보였으나 중단** |
 
@@ -155,12 +156,19 @@ ssh -p 25022 xilinx@sota.pusan.ac.kr 'sudo reboot'
 
 ## 6. 알려진 함정
 
-러너가 개인 PC 의 WSL 에 얹혀 있어 **WSL 이 내려가면 CI 가 큐에만 쌓인다.**
-Actions → Settings → Runners 에서 Offline 인지 먼저 본다.
+러너는 **연구실 서버 `sota-AIP`(192.168.1.150) 의 `ehdgns` 계정**에 있다
+(2026-11-04 이전, 이름 `sota-aip`, systemd 서비스라 재부팅해도 뜬다). CI 가
+큐에만 쌓이면 Actions → Settings → Runners 에서 Offline 인지 먼저 본다.
+접속은 개인 PC WSL 의 `ssh lab`(키 `~/.ssh/id_ed25519`, 교내망 밖이면
+`ssh -p 25622 ehdgns@sota.pusan.ac.kr`).
 
-```powershell
-wsl -d Ubuntu-22.04 -u root bash -c "cd /home/ehdgns/actions-runner && ./svc.sh status"
+```sh
+ssh lab 'cd ~/actions-runner && sudo ./svc.sh status'
 ```
+
+**공용 서버다.** 다른 사용자(sota, jiho, furio …)가 있으니 docker 와 내 계정
+밖은 건드리지 않는다. 컴파일러 트리 `~/nestc-upstream` 은 개인 PC 에서
+rsync 로 옮긴 것이다(1.4GB, 빌드 생략).
 
 PC 가 Wi-Fi 라 **보드로 가는 SSH 가 중간에 끊긴다.** 2026-11-03 에 보드에서는
 빌드가 끝났는데 세션이 안 돌아와 단계가 매달렸다. keepalive 를 60초로

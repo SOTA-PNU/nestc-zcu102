@@ -189,7 +189,16 @@ b 'grep -n "Queue<" nest-compiler-2024/vta/vtalib/include/zcu102/api.h'
 부팅되지 않고 누군가 현장에서 SD 카드를 꺼내야 한다. 연구실에서 UART
 콘솔을 볼 수 있을 때만 한다.
 
-## 3. CI 를 연구실 상시 PC 로
+## 3. CI 를 연구실 상시 PC 로 — **끝 (2026-11-04)**
+
+연구실 서버 `sota-AIP`(192.168.1.150, Ubuntu 24.04, 24코어, 62GB, 공용)로
+옮겼다. 계정 `ehdgns`(sudo, docker), 러너 `sota-aip`(systemd). 도커 설치,
+이미지 pull(30.6GB, 개인 PC 와 같은 ID), 상류 트리는 WSL 에서 rsync(빌드
+생략). 첫 model-test(41809028759)가 서버에서 통과 — resnet18 3/3,
+4코어 24.20 img/s. 개인 PC 러너 `ehdgns` 는 서비스를 끄고 GitHub 에서
+지웠다. 이제 개인 PC 를 꺼도 CI 가 돈다. 아래는 당시 기록이다.
+
+### (기록) 옮기기 전 계획
 
 **2026-11-02 변경: vcu118-dev 를 쓰지 않는다.** 연구실에 상시 켜 두는
 새 PC 가 들어오므로 거기에 올린다. 근거는 `docs/10-lab-server-setup.md`
