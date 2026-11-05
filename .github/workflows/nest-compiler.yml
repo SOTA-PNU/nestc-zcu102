@@ -1,0 +1,280 @@
+name: nest-compiler
+# 실행 이름에 커밋을 넣는다. nest-compiler 쪽 board-test 가 자기가 요청한
+# 실행을 이 이름으로 찾아 결과를 기다린다.
+run-name: "nest-compiler ${{ github.event.client_payload.ref || inputs.ref || 'main' }}${{ github.event.client_payload.pr && format(' (PR #{0})', github.event.client_payload.pr) || '' }}"
+
+# SOTA-PNU/nest-compiler(권용인 님 작업)를 ZCU102 보드에서 검증한다.
+#
+# 그쪽 저장소의 build.yml 은 컴파일러 빌드까지만 하고 "보드 테스트는
+# SOTA-PNU/nestc-zcu102 에서 한다" 고 적어 두었다. 이 워크플로가 그것이다.
+#
+# 기존 model-test / multievta(ETRI 원본 7326f0d 기준)는 그대로 둔다. 이쪽은
+# 트리가 따로 있다.
+#   서버  ~/nestc-sota                 컴파일러 (빌드 캐시는 ~/nestc-upstream 에서 복사)
+#   보드  ~/nest-compiler-sota         런타임 (vta/vtalib = SOTA-PNU/vta_lib)
+#         build_aarch64 / build_aarch64_multi
+#
+# 패치: nest-compiler 에 이미 들어간 것(Concat/InsertTensor, 재양자화 반올림)은
+# 빼고, 아직 없는 것만 얹는다. 무엇을 얹었는지 결과에 남긴다.
+#   서버  patch_tiling.py        튜닝 표에 없는 층의 기본 타일링
+#   보드  patch_transpose.py     aarch64 transpose() 미구현 (ResNet-50 에 필요)
+#         patch_relu_rescale.py  독립 ReLU 재양자화의 int8 포화
+#         patch_vta_max_xfer.py  명령 큐 32MB -> 16MB (멀티코어가 CMA 에 들어가게)
+#
+# 언제 도나
+#   - 수동: Actions -> nest-compiler -> Run workflow (ref 에 브랜치·커밋)
+#   - 매일 03:40 KST: nest-compiler main 이 마지막으로 검증한 커밋과 다를 때만
+#   - repository_dispatch(type: nest-compiler): nest-compiler 쪽 CI 가 부를 수 있게.
+#     client_payload.ref 로 커밋을 넘긴다. 부르는 쪽에 이 저장소 권한 토큰이 필요하다.
+#
+# 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "SOTA-PNU/nest-compiler 의 브랜치 또는 커밋"
+        type: string
+        default: main
+  repository_dispatch:
+    types: [nest-compiler]
+  schedule:
+    - cron: "40 18 * * *"   # 매일 03:40 KST
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/nest-compiler.yml"
+
+concurrency:
+  group: zcu102-board
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  NC_REPO: https://github.com/SOTA-PNU/nest-compiler.git
+  BOARD_SRC: /home/xilinx/nest-compiler-sota
+  DOCKER_IMAGE: leejaymin/nestc-ssh:latest
+  TOOLS_IN_CONTAINER: /src/build/glow/bin
+  SINGLE_MODELS: "resnet18 resnet50"
+  MULTI_MODELS: "resnet18-4core resnet50-3core"
+
+jobs:
+  board:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 검증할 커밋 정하기
+        run: |
+          set -eu
+          REF="${{ github.event.client_payload.ref || inputs.ref || 'main' }}"
+          if echo "$REF" | grep -qE '^[0-9a-f]{7,40}$'; then
+            SHA=$REF
+          else
+            SHA=$(git ls-remote "$NC_REPO" "refs/heads/$REF" | cut -f1)
+          fi
+          [ -n "$SHA" ] || { echo "nest-compiler 에 없는 ref: $REF"; exit 1; }
+          echo "REF=$REF" >> "$GITHUB_ENV"
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+          echo "nest-compiler $REF = $SHA"
+          SKIP=0
+          if [ "${{ github.event_name }}" = "schedule" ] && \
+             grep -q "nest-compiler: \`${SHA:0:12}" results/nest-compiler.md 2>/dev/null; then
+            echo "이미 검증한 커밋이다. 건너뛴다."; SKIP=1
+          fi
+          echo "SKIP=$SKIP" >> "$GITHUB_ENV"
+
+      - name: SSH 준비
+        if: env.SKIP == '0'
+        run: |
+          set -eu
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOARD_SSH_KEY }}" > ~/.ssh/board_key
+          chmod 600 ~/.ssh/board_key
+          cat > ~/.ssh/config <<EOF
+          Host board
+            HostName ${{ secrets.BOARD_HOST }}
+            Port ${{ secrets.BOARD_PORT }}
+            User ${{ secrets.BOARD_USER }}
+            IdentityFile ~/.ssh/board_key
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh board 'uname -m; grep CmaFree /proc/meminfo'
+
+      # 컴파일러: 지정 커밋으로 맞추고 우리 패치 중 아직 필요한 것만 얹어 증분 빌드.
+      # 빌드 캐시가 /root/nestc 경로로 잡혀 있으므로 그 마운트를 그대로 쓴다.
+      - name: 컴파일러 트리 맞추기와 빌드
+        if: env.SKIP == '0'
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          UP=$HOME/nestc-sota
+          [ -d "$UP/build" ] || { echo "서버에 $UP 가 없다. docs/15 의 준비 절차를 본다." >&2; exit 1; }
+          echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
+          cd "$UP"
+          git remote get-url sota >/dev/null 2>&1 || git remote add sota "$NC_REPO"
+          git fetch -q --no-recurse-submodules sota "$SHA"
+          git checkout -q -f --detach "$SHA"
+          git clean -fdq -e build
+          git submodule sync -q
+          git submodule update -q --init --force
+          VTALIB_SHA=$(git -C vta/vtalib rev-parse HEAD)
+          echo "VTALIB_SHA=$VTALIB_SHA" >> "$GITHUB_ENV"
+          echo "nest-compiler $(git log --oneline -1)"
+          echo "vta_lib       $(git -C vta/vtalib log --oneline -1)"
+          cd "$GITHUB_WORKSPACE"
+          python3 ci/patch_tiling.py "$UP"
+          docker run --rm -v "$UP":/root/nestc -w /root/nestc/build "$DOCKER_IMAGE" \
+            bash -c "ninja model-compiler image-classifier 2>&1 | tail -20" | tee logs/compiler-build.log
+
+      # 보드 런타임: 같은 커밋의 vta_lib 으로 맞추고 패치 후 vtalib 만 다시 빌드.
+      # build_* 디렉터리는 추적되지 않는 파일이라 checkout -f 가 지우지 않는다.
+      - name: 보드 런타임 맞추기와 빌드
+        if: env.SKIP == '0'
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          scp ci/patch_transpose.py ci/patch_relu_rescale.py ci/patch_vta_max_xfer.py board:/home/xilinx/
+          ssh board "set -euo pipefail
+            cd $BOARD_SRC
+            git remote get-url sota >/dev/null 2>&1 || git remote add sota $NC_REPO
+            git fetch -q --no-recurse-submodules sota $SHA
+            git checkout -q -f --detach $SHA
+            git submodule sync -q vta/vtalib
+            git submodule update -q --force vta/vtalib
+            test \"\$(git -C vta/vtalib rev-parse HEAD)\" = $VTALIB_SHA
+            echo \"nest-compiler \$(git log --oneline -1)\"
+            echo \"vta_lib       \$(git -C vta/vtalib log --oneline -1)\"
+            python3 /home/xilinx/patch_transpose.py $BOARD_SRC/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+            python3 /home/xilinx/patch_relu_rescale.py $BOARD_SRC
+            python3 /home/xilinx/patch_vta_max_xfer.py $BOARD_SRC
+            for b in build_aarch64 build_aarch64_multi; do
+              echo \"--- \$b vtalib ---\"
+              make -C $BOARD_SRC/\$b/vta/vtalib -j2 2>&1 | tail -4
+              ls -l $BOARD_SRC/\$b/vta/vtalib/libVTABundle.a $BOARD_SRC/\$b/vta/vtalib/libvta_runtime.a
+            done" 2>&1 | tee logs/board-build.log
+
+      # 이 단계에서 VTA 가 열린다. 워크플로를 취소하지 않는다.
+      - name: 1코어 모델
+        if: env.SKIP == '0'
+        run: |
+          set -eu
+          scp scripts/board-build-run.sh scripts/board-bitstream.sh scripts/board-multi-run.sh \
+            scripts/board-setup-multi.sh board:/home/xilinx/
+          ssh board "chmod +x /home/xilinx/board-*.sh; /home/xilinx/board-bitstream.sh single"
+          : > logs/summary.txt
+          HARD_FAIL=0
+          for m in $SINGLE_MODELS; do
+            echo "::group::$m"
+            OUT="$GITHUB_WORKSPACE/bundle-out/$m"; BB="/home/xilinx/bundles/nc-$m"
+            rm -rf "$OUT"; mkdir -p "$OUT"
+            {
+              docker run --rm --user "$(id -u):$(id -g)" \
+                -v "$NESTC_UPSTREAM":/src -v "$GITHUB_WORKSPACE":/work -w /work "$DOCKER_IMAGE" \
+                bash scripts/gen-bundle.sh --conf "models/$m.conf" \
+                  --tools "$TOOLS_IN_CONTAINER" --upstream /src --out "/work/bundle-out/$m"
+              ssh board "rm -rf $BB; mkdir -p $BB"
+              scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf board:"$BB/"
+              ssh board "set -eu; export PATH=\$HOME/bin:\$PATH
+                /home/xilinx/board-build-run.sh --bundle $BB \
+                  --src $BOARD_SRC --build $BOARD_SRC/build_aarch64"
+            } 2>&1 | tee "logs/$m.log" || true
+            if grep -q '^== 전부 통과' "logs/$m.log"; then V=통과; else V=실패; HARD_FAIL=1; fi
+            { echo "### $m — $V"; echo; echo '```'
+              grep -E '^\s+(OK|FAIL) ' "logs/$m.log" || echo "(결과 줄 없음)"
+              echo '```'; echo; } >> logs/summary.txt
+            echo "::endgroup::"
+          done
+          echo "HARD_FAIL=$HARD_FAIL" >> "$GITHUB_ENV"
+
+      - name: 멀티코어 모델
+        if: env.SKIP == '0'
+        run: |
+          set -eu
+          for m in $MULTI_MODELS; do
+            echo "::group::$m"
+            OUT="$GITHUB_WORKSPACE/multi-out/$m"; BB="/home/xilinx/bundles/nc-multi-$m"
+            rm -rf "$OUT"; mkdir -p "$OUT"
+            {
+              docker run --rm --user "$(id -u):$(id -g)" \
+                -v "$NESTC_UPSTREAM":/src -v "$GITHUB_WORKSPACE":/work -w /work "$DOCKER_IMAGE" \
+                bash scripts/gen-bundle.sh --conf "models-multi/$m.conf" \
+                  --tools "$TOOLS_IN_CONTAINER" --upstream /src --out "/work/multi-out/$m"
+              ssh board "rm -rf $BB; mkdir -p $BB"
+              scp "$OUT"/*.cpp "$OUT"/*.h "$OUT"/*.bin "$OUT"/bundle.conf board:"$BB/"
+              ssh board "set -eu; export PATH=\$HOME/bin:\$PATH
+                /home/xilinx/board-bitstream.sh multi
+                /home/xilinx/board-multi-run.sh --bundle $BB \
+                  --src $BOARD_SRC --build $BOARD_SRC/build_aarch64_multi"
+            } 2>&1 | tee "logs/multi-$m.log" || true
+            if grep -q '^== 전부 통과' "logs/multi-$m.log"; then V=통과; else V=실패; echo "HARD_FAIL=1" >> "$GITHUB_ENV"; fi
+            { echo "### $m — $V"; echo; echo '```'
+              grep -E '^   (총|장당|처리량|사용량|실행 중)|fpga_buff_|Check failed|^== (중단|실패)' \
+                "logs/multi-$m.log" || echo "(측정값 없음)"
+              echo '```'; echo; } >> logs/summary.txt
+            echo "::endgroup::"
+          done
+
+      - name: 비트스트림 되돌리기
+        if: always() && env.SKIP == '0'
+        run: |
+          ssh board "test -x /home/xilinx/board-bitstream.sh && /home/xilinx/board-bitstream.sh single" || \
+            echo "::warning::단일 비트스트림으로 되돌리지 못했다. 재부팅하면 rc.local 이 되돌린다."
+
+      - name: 결과를 저장소에 기록
+        if: always() && env.SKIP == '0'
+        run: |
+          set -eu
+          mkdir -p results
+          {
+            echo "# nest-compiler 보드 검증 결과"
+            echo ""
+            echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "- nest-compiler: \`${SHA:0:12}\` (ref \`$REF\`) https://github.com/SOTA-PNU/nest-compiler/commit/$SHA"
+            echo "- vta_lib: \`${VTALIB_SHA:0:12}\` https://github.com/SOTA-PNU/vta_lib/commit/${VTALIB_SHA:-}"
+            echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- 얹은 패치: 서버 patch_tiling / 보드 patch_transpose, patch_relu_rescale, patch_vta_max_xfer"
+            echo "- 비교 기준(ETRI 원본 7326f0d): results/latest.md, results/multievta.md"
+            echo ""
+            cat logs/summary.txt 2>/dev/null || echo "(요약 없음 — 실행 전에 멈췄다)"
+          } > results/nest-compiler.md
+          # 기존 CI 의 results/*.log 를 덮지 않게 nc- 를 붙여 둔다.
+          for f in logs/*.log; do [ -f "$f" ] && cp "$f" "results/nc-$(basename "$f")"; done
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/nest-compiler.md results/nc-*.log
+          git diff --cached --quiet && { echo "변화 없음"; exit 0; }
+          git commit -m "결과: nest-compiler ${SHA:0:7} 보드 검증 ${GITHUB_RUN_ID} [skip ci]"
+          for try in 1 2 3; do
+            git fetch -q origin main
+            git rebase -X theirs origin/main || { git rebase --abort; exit 1; }
+            git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: 로그 업로드
+        if: always() && env.SKIP == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nest-compiler-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
+
+      - name: 키 정리
+        if: always()
+        run: rm -f ~/.ssh/board_key
+
+      - name: 판정
+        if: always() && env.SKIP == '0'
+        run: |
+          cat logs/summary.txt 2>/dev/null || true
+          [ "${HARD_FAIL:-0}" = "0" ] || { echo "실패가 있다"; exit 1; }
+          echo "전부 통과"
