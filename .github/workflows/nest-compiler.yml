@@ -145,7 +145,8 @@ jobs:
           ssh board "set -euo pipefail
             cd $BOARD_SRC
             git remote get-url sota >/dev/null 2>&1 || git remote add sota $NC_REPO
-            git fetch -q --no-recurse-submodules sota $SHA
+            # 재부팅 직후에는 보드 DNS 가 아직 안 올라와 있다(2026-11-05 첫 실행). 잠깐 기다려 다시 한다.
+            for t in 1 2 3 4 5; do git fetch -q --no-recurse-submodules sota $SHA && break; echo \"fetch 재시도 \$t\"; sleep 30; done
             git checkout -q -f --detach $SHA
             git submodule sync -q vta/vtalib
             git submodule update -q --force vta/vtalib
