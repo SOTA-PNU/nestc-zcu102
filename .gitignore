@@ -18,3 +18,4 @@ desktop.ini
 
 # 상류 소스 참조 사본 — ETRI 저작권 표시가 붙어 있으므로 공개 저장소에 올리지 않는다
 .upstream-ref/
+bench-out/

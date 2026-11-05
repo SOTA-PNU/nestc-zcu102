@@ -1,0 +1,102 @@
+name: benchmark
+
+# CPU 단독 벤치마크. VTA 없이 같은 컴파일러의 CPU 백엔드(aarch64)로 만든
+# 번들을 보드 ARM 에서 돌려, VTA 수치(model-test, multievta)와 비교할
+# 기준값을 잰다. 자세한 것은 scripts/bench-cpu.sh 머리말.
+#
+# VTA·CMA 는 건드리지 않는다. 그래도 보드 시간을 흐트러뜨리지 않게
+# 다른 보드 작업과 같은 줄에 선다.
+#
+# 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bench/**"
+      - "scripts/bench-cpu.sh"
+      - ".github/workflows/benchmark.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: zcu102-board
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  bench:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 90
+    env:
+      DOCKER_IMAGE: leejaymin/nestc-ssh:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH 준비
+        run: |
+          set -eu
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOARD_SSH_KEY }}" > ~/.ssh/board_key
+          chmod 600 ~/.ssh/board_key
+          cat > ~/.ssh/config <<EOF
+          Host board
+            HostName ${{ secrets.BOARD_HOST }}
+            Port ${{ secrets.BOARD_PORT }}
+            User ${{ secrets.BOARD_USER }}
+            IdentityFile ~/.ssh/board_key
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh board 'uname -m; nproc; grep CmaFree /proc/meminfo'
+
+      - name: CPU 단독 측정
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          bash scripts/bench-cpu.sh 2>&1 | tee logs/bench-cpu.log
+
+      - name: 결과 커밋
+        if: success()
+        run: |
+          set -eu
+          {
+            echo "# CPU 단독 벤치마크 결과"
+            echo ""
+            echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "- 커밋: ${GITHUB_SHA:0:8}"
+            echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- 보드 CPU: ARM Cortex-A53 x4 (ZCU102 PS), VTA 미사용"
+            echo ""
+            echo '```'
+            grep -E '^=+ |^-+ .* -+$|RESULT|LATENCY|THROUGHPUT|TOTAL' logs/bench-cpu.log
+            echo '```'
+          } > results/bench-cpu.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/bench-cpu.md
+          git diff --cached --quiet && { echo "변화 없음"; exit 0; }
+          git commit -m "결과: benchmark ${GITHUB_RUN_ID} [skip ci]"
+          for try in 1 2 3; do
+            git fetch -q origin main
+            git rebase -X theirs origin/main || { git rebase --abort; exit 1; }
+            git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: 로그 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
+
+      - name: 키 정리
+        if: always()
+        run: rm -f ~/.ssh/board_key
