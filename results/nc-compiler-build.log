@@ -1,0 +1,20 @@
+[182/201] Building CXX object glow/lib/Importer/CMakeFiles/Importer.dir/ProtobufLoader.cpp.o
+[183/201] Building CXX object glow/tools/loader/CMakeFiles/image-classifier.dir/ExecutorCoreHelperFunctions.cpp.o
+[184/201] Building CXX object glow/lib/ExecutionEngine/CMakeFiles/ExecutionEngine.dir/ExecutionEngine.cpp.o
+[185/201] Building CXX object glow/lib/Importer/CMakeFiles/Importer.dir/ONNXIFIModelLoader.cpp.o
+[186/201] Building CXX object glow/tools/loader/CMakeFiles/image-classifier.dir/ImageClassifier.cpp.o
+[187/201] Building CXX object glow/tools/loader/CMakeFiles/image-classifier.dir/ExecutorCore.cpp.o
+[188/201] Building CXX object glow/tools/loader/CMakeFiles/model-compiler.dir/__/__/__/tools/loader/Loader.cpp.o
+[189/201] Building CXX object glow/lib/Importer/CMakeFiles/Importer.dir/caffe2.pb.cc.o
+[190/201] Building CXX object glow/lib/Runtime/HostManager/CMakeFiles/HostManager.dir/__/__/__/__/lib/Runtime/HostManager/HostManager.cpp.o
+[191/201] Building CXX object glow/tools/loader/CMakeFiles/image-classifier.dir/__/__/__/tools/loader/Loader.cpp.o
+[192/201] Building CXX object glow/lib/Importer/CMakeFiles/Importer.dir/TFLiteModelLoader.cpp.o
+[193/201] Building CXX object glow/lib/Exporter/CMakeFiles/Exporter.dir/__/__/__/lib/Exporter/ONNXModelWriter.cpp.o
+[194/201] Building CXX object glow/lib/Importer/CMakeFiles/Importer.dir/Caffe2ModelLoader.cpp.o
+[195/201] Building CXX object glow/lib/Importer/CMakeFiles/Importer.dir/__/__/__/lib/Importer/ONNXModelLoader.cpp.o
+[196/201] Linking CXX static library glow/lib/Importer/libImporter.a
+[197/201] Linking CXX static library glow/lib/Exporter/libExporter.a
+[198/201] Linking CXX static library glow/lib/Runtime/HostManager/libHostManager.a
+[199/201] Linking CXX static library glow/lib/ExecutionEngine/libExecutionEngine.a
+[200/201] Linking CXX executable glow/bin/model-compiler
+[201/201] Linking CXX executable glow/bin/image-classifier
