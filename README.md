@@ -17,7 +17,48 @@ VTA(FPGA) + ARM CPU 분산 추론
 ```
 
 > **최종 정리는 [docs/14-wrapup-2026-11-05.md](docs/14-wrapup-2026-11-05.md)** 에 있다
-> (성능·멀티코어·한계·CI 사용법). 아래 표는 2026-09 초기 기록이다.
+> (성능·멀티코어·한계·CI 사용법). 아래 "현재 상태" 표는 2026-09 초기 기록이다.
+
+## 벤치마크 — VTA 대 CPU 단독 (2026-11-05)
+
+같은 보드(ZCU102), 같은 모델, 같은 입력 전처리에서 VTA 를 쓴 경우와 쓰지 않은
+경우를 비교했다. CPU 단독은 **같은 NEST-C 컴파일러의 CPU 백엔드**(LLVM,
+aarch64 Cortex-A53)로 만든 번들을 보드 ARM 코어에서만 돌린 것이다.
+
+| 모델 | 구성 | 장당 지연 (1개) | 처리량 (4개 병렬) | 정답 3/3 |
+|---|---|---|---|---|
+| ResNet-18 | **VTA int8** | **91.6 ms** | **24.21 img/s** (EVTA 4코어) | O |
+| | CPU fp32 | 1,879 ms | 1.85 img/s (A53 4스레드) | O |
+| | CPU int8 | 3,238 ms | 1.23 img/s | **X** (전부 644) |
+| ResNet-50 | **VTA int8** | **419 ms** | **6.63 img/s** (EVTA 4코어) | O |
+| | CPU fp32 | 4,583 ms | 0.77 img/s | O (고양이 285) |
+| | CPU int8 | 7,679 ms | 0.52 img/s | O |
+
+**VTA 가속 배수** (CPU fp32 대비)
+
+| 모델 | 지연 (1개 대 1개) | 처리량 (4코어 대 4스레드) |
+|---|---|---|
+| ResNet-18 | **20.5배** | **13.1배** |
+| ResNet-50 | **10.9배** | **8.6배** |
+
+읽는 법
+
+- VTA 수치는 model-test 41813475989(단일)와 multievta 41815522975(4코어),
+  CPU 수치는 benchmark 41950655199 이다. 원본은 `results/latest.md`,
+  `results/multievta.md`, `results/bench-cpu.md`.
+- 처리량은 100장(CPU 는 24~80장)을 4개 실행 단위가 나눠 처리한 벽시계 기준이다.
+- **CPU 기준은 "같은 컴파일러" 기준이다.** Glow CPU 백엔드는 일반 LLVM 코드 생성이라
+  손으로 최적화한 ARM 라이브러리(ACL, TFLite 등)보다 느릴 수 있다. VTA 번들의
+  CPU 쪽 연산은 ACL(NEON)을 쓰므로, 배수에는 그 차이도 섞여 있다.
+- CPU int8 이 fp32 보다 느리다. Glow CPU 백엔드의 int8 커널이 A53 용으로
+  최적화되어 있지 않기 때문으로 보인다(원인 분석은 안 함).
+- ResNet-18 CPU int8 은 세 장 모두 644 로 틀린다. VTA int8 은 같은 보정 이미지·같은
+  양자화 방식인데도 맞힌다. CPU 백엔드의 양자화 경로 문제로 보이며 따로 파지 않았다.
+- ResNet-50 의 고양이는 fp32 가 285(이집트 고양이), int8(VTA·CPU 모두)이 281(얼룩
+  고양이)이다. CI 기대값 281 은 int8 의 답이다. 둘 다 고양이 계열이다.
+- 정확도는 이미지 3장 확인뿐이다. ImageNet 검증셋 top-1/top-5, 전력(img/s/W)은 재지 않았다.
+
+다시 재려면 Actions → benchmark → Run workflow (`scripts/bench-cpu.sh`, `bench/cpu_bench_main.cpp`).
 
 ## 현재 상태
 
