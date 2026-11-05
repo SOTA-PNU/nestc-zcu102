@@ -25,7 +25,8 @@ run-name: "nest-compiler ${{ github.event.client_payload.ref || inputs.ref || 'm
 #   - 수동: Actions -> nest-compiler -> Run workflow (ref 에 브랜치·커밋)
 #   - 매일 03:40 KST: nest-compiler main 이 마지막으로 검증한 커밋과 다를 때만
 #   - repository_dispatch(type: nest-compiler): nest-compiler 쪽 CI 가 부를 수 있게.
-#     client_payload.ref 로 커밋을 넘긴다. 부르는 쪽에 이 저장소 권한 토큰이 필요하다.
+#     client_payload.ref 로 커밋을 넘긴다. 부르는 쪽 토큰에 이 저장소의
+#     Contents: Read and write, Actions: Read-only 가 필요하다(docs/15).
 #
 # 필요한 시크릿: BOARD_HOST BOARD_PORT BOARD_USER BOARD_SSH_KEY
 

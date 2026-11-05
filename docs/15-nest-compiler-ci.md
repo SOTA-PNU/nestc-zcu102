@@ -49,7 +49,8 @@ nest-compiler 에 이미 같은 것이 들어간 우리 패치는 뺐다.
 ## nest-compiler 쪽 설정
 
 `.github/workflows/board-test.yml` 과 시크릿 `BOARD_CI_TOKEN` 이 필요하다. 토큰은
-fine-grained, Resource owner SOTA-PNU, 저장소 nestc-zcu102 만, 권한 Actions: Read and write.
+fine-grained, Resource owner SOTA-PNU, 저장소 nestc-zcu102 만, 권한 Contents: Read and write
+(repository_dispatch 요청에 필요), Actions: Read-only(실행 상태 조회).
 nest-compiler → Settings → Secrets and variables → Actions 에 넣는다. 포크 PR 은 건너뛴다.
 
 수동 실행: nestc-zcu102 → Actions → nest-compiler → Run workflow (ref 에 브랜치·커밋).
