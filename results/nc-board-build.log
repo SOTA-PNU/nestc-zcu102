@@ -1,1 +1,25 @@
-fatal: unable to access 'https://github.com/SOTA-PNU/nest-compiler.git/': Could not resolve host: github.com
+nest-compiler 214c04b Merge pull request #4 from SOTA-PNU/feature/add-ssd300
+vta_lib       58c601b Fix stale micro-op kernels after the simulator uop buffer wraps around
+패치 완료 — 백업 /home/xilinx/nest-compiler-sota/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp.bak.20261105-044918
+패치 vta/vtalib/lib/Bundle/CPUBundle_generic.cpp
+패치 vta/vtalib/lib/Bundle/CPUBundle_x86.cpp
+
+다음 — 보드에서 vtalib 을 다시 빌드한다:
+  cd <빌드 디렉터리> && make -j1 VTABundle
+경고: 기준 구현과 다름, 건너뜀 — vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
+   VTA_MAX_XFER  1<<25 -> 1<<24  (16MB, 코어당 큐 둘이니 32MB)
+   보드에서 vtalib 를 다시 빌드해야 적용된다.
+--- build_aarch64 vtalib ---
+make[2]: Leaving directory '/home/xilinx/nest-compiler-sota/build_aarch64'
+[100%] Built target VTABundle
+make[1]: Leaving directory '/home/xilinx/nest-compiler-sota/build_aarch64'
+make: Leaving directory '/home/xilinx/nest-compiler-sota/build_aarch64/vta/vtalib'
+-rw-rw-r-- 1 xilinx xilinx 242872 Nov  5 04:50 /home/xilinx/nest-compiler-sota/build_aarch64/vta/vtalib/libVTABundle.a
+-rw-rw-r-- 1 xilinx xilinx 181366 Nov  5 04:49 /home/xilinx/nest-compiler-sota/build_aarch64/vta/vtalib/libvta_runtime.a
+--- build_aarch64_multi vtalib ---
+make[2]: Leaving directory '/home/xilinx/nest-compiler-sota/build_aarch64_multi'
+[100%] Built target mul_performance_test
+make[1]: Leaving directory '/home/xilinx/nest-compiler-sota/build_aarch64_multi'
+make: Leaving directory '/home/xilinx/nest-compiler-sota/build_aarch64_multi/vta/vtalib'
+-rw-rw-r-- 1 xilinx xilinx 242872 Nov  5 04:51 /home/xilinx/nest-compiler-sota/build_aarch64_multi/vta/vtalib/libVTABundle.a
+-rw-rw-r-- 1 xilinx xilinx 181366 Nov  5 04:50 /home/xilinx/nest-compiler-sota/build_aarch64_multi/vta/vtalib/libvta_runtime.a

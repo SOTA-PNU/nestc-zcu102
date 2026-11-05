@@ -1,0 +1,121 @@
+== 모델 resnet18-4core
+   ONNX   /src/build/models/mxnet_exported_resnet18.onnx
+   이미지 1장
+   출력   /work/multi-out/resnet18-4core
+== 1단계 보정 프로파일
+Model: /src/build/models
+Running 1 thread(s).
+   calib.yaml 564 줄
+== 2단계 번들 생성
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1105 04:51:59.036002    24 HostManager.cpp:242] Destroying host manager...
+== 2-b단계 멀티 EVTA 번들 (코어 4개)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1105 04:51:59.373420    32 HostManager.cpp:242] Destroying host manager...
+   코어 1  mxnet_exported_resnet18_1.cpp  (마스크 2)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1105 04:51:59.705631    35 HostManager.cpp:242] Destroying host manager...
+   코어 2  mxnet_exported_resnet18_2.cpp  (마스크 4)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I1105 04:52:00.035866    38 HostManager.cpp:242] Destroying host manager...
+   코어 3  mxnet_exported_resnet18_3.cpp  (마스크 8)
+   main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
+          범위 0~255.0, 채널 RGB, 정규화 0, 레이아웃 NHWC
+== 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
+"resnetv10_dense0_fwd__1"
+== 완료
+total 47140
+drwxr-xr-x 2 1004 1004     4096 Nov  5 04:52 .
+drwxr-xr-x 3 1004 1004     4096 Nov  5 04:51 ..
+-rw-r--r-- 1 1004 1004    23416 Nov  5 04:52 Main.cpp
+-rw-r--r-- 1 1004 1004     3762 Nov  5 04:52 VTARuntime.h
+-rw-r--r-- 1 1004 1004       36 Nov  5 04:52 bundle.conf
+-rw-r--r-- 1 1004 1004    26211 Nov  5 04:51 calib.yaml
+-rw-r--r-- 1 1004 1004    40446 Nov  5 04:51 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1004 1004     2190 Nov  5 04:51 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1004 1004 12003168 Nov  5 04:51 mxnet_exported_resnet18.weights.bin
+-rw-r--r-- 1 1004 1004    40484 Nov  5 04:51 mxnet_exported_resnet18_1.cpp
+-rw-r--r-- 1 1004 1004     2206 Nov  5 04:51 mxnet_exported_resnet18_1.h
+-rw-r--r-- 1 1004 1004 12003168 Nov  5 04:51 mxnet_exported_resnet18_1.weights.bin
+-rw-r--r-- 1 1004 1004    40484 Nov  5 04:51 mxnet_exported_resnet18_2.cpp
+-rw-r--r-- 1 1004 1004     2206 Nov  5 04:51 mxnet_exported_resnet18_2.h
+-rw-r--r-- 1 1004 1004 12003168 Nov  5 04:51 mxnet_exported_resnet18_2.weights.bin
+-rw-r--r-- 1 1004 1004    40484 Nov  5 04:52 mxnet_exported_resnet18_3.cpp
+-rw-r--r-- 1 1004 1004     2206 Nov  5 04:52 mxnet_exported_resnet18_3.h
+-rw-r--r-- 1 1004 1004 12003168 Nov  5 04:52 mxnet_exported_resnet18_3.weights.bin
+== 비트스트림 multi  (/home/xilinx/bitstreams/zcu102_4_1x16_i8w8a32_16_15_18_17.bit)
+   fpga operating
+   0xA0000000  ctrl=00000004
+   0xA0010000  ctrl=00000004
+   0xA0020000  ctrl=00000004
+   0xA0030000  ctrl=00000004
+== 완료  multi
+== 멀티 EVTA 번들 resnet18-4core  (코어 4개)
+   mxnet_exported_resnet18_1.cpp
+   mxnet_exported_resnet18_2.cpp
+   mxnet_exported_resnet18_3.cpp
+   mxnet_exported_resnet18.cpp
+   CMA 여유 253332 kB (필요 추정 181956 kB, 코어 4개, 가중치 11721 kB)
+== 컴파일 (번들 네 벌이라 단일보다 오래 걸린다)
+Main.cpp: In function ‘void* thread_main(void*)’:
+Main.cpp:484:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘void* thread_main1(void*)’:
+Main.cpp:528:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘void* thread_main2(void*)’:
+Main.cpp:571:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘void* thread_main3(void*)’:
+Main.cpp:613:64: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+                                       "resnetv10_dense0_fwd__1");
+                                                                ^
+Main.cpp: In function ‘int main(int, char**)’:
+Main.cpp:644:78: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_config, "data");
+                                                                              ^
+Main.cpp:656:80: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_1_config, "data");
+                                                                                ^
+Main.cpp:668:80: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_2_config, "data");
+                                                                                ^
+Main.cpp:680:80: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+       (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_3_config, "data");
+                                                                                ^
+== 링크
+== 실행 (네 코어 동시)
+-- CMA 현황 --
+CmaTotal:         262144 kB
+CmaFree:          253332 kB
+-- 번들당 요구량 --
+   mxnet_exported_resnet18_1.h              // Total data size: 606112(bytes)
+   mxnet_exported_resnet18_2.h              // Total data size: 606112(bytes)
+   mxnet_exported_resnet18_3.h              // Total data size: 606112(bytes)
+   mxnet_exported_resnet18.h                // Total data size: 606112(bytes)
+   /home/xilinx/bundles/nc-multi-resnet18-4core/mxnet_exported_resnet18_1.weights.bin 12003168 bytes
+   /home/xilinx/bundles/nc-multi-resnet18-4core/mxnet_exported_resnet18_2.weights.bin 12003168 bytes
+   /home/xilinx/bundles/nc-multi-resnet18-4core/mxnet_exported_resnet18_3.weights.bin 12003168 bytes
+   /home/xilinx/bundles/nc-multi-resnet18-4core/mxnet_exported_resnet18.weights.bin 12003168 bytes
+/home/xilinx/board-multi-run.sh: line 183:  5701 Terminated              ( for i in $(seq 1 40);
+do
+    grep -i '^CmaFree' /proc/meminfo | awk '{print $2}'; sleep 3;
+done ) > /tmp/cma_samples.txt 2> /dev/null
+-- CMA 실측 --
+   실행 중 최저 여유 74112 kB
+   사용량 179220 kB  (코어당 약 44805 kB)
+96
+97
+98
+99
+100
+100
+100
+Inference time: 4245.54ms
+== 전부 통과
+   총 4245.54ms / 100장
+   장당 42.5ms (벽시계 기준)
+   처리량 23.55 img/s
