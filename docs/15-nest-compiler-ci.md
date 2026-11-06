@@ -16,10 +16,16 @@ ETRI NEST-C 를 옮겨 와 고치고 있는 연구실 저장소다(vta/vtalib �
 | 보드 키 | 서버 `~/.ssh/zcu102_key` | 시크릿 `BOARD_SSH_KEY` |
 
 두 러너 모두 연구실 서버(sota-AIP, ehdgns)에 있고 보드는 한 대다. GitHub 의
-`concurrency` 는 저장소마다 따로라 서로를 기다리지 않는다. 그래서 보드를 쓰는 모든
-job 이 처음에 `scripts/board-lock.sh acquire`, 끝에 `release`(always)를 부른다.
-잠금은 서버의 `~/.zcu102-board.lock` 디렉터리다. 300분 넘은 잠금은 버린다.
-급하면 서버에서 `rm -rf ~/.zcu102-board.lock`.
+`concurrency` 는 저장소마다 따로라 서로를 기다리지 않는다.
+
+서버 잠금(`scripts/board-lock.sh`, `~/.zcu102-board.lock`)을 만들어 nest-compiler 의
+test-board 에도 넣었다가 **2026-11-06 에 nest-compiler 쪽에서는 뺐다**(PR #6, 1056a59).
+공식 저장소에 개인 저장소의 장치를 넣지 않기로 했기 때문이다. 이 저장소 workflow 에는
+남아 있지만 이제 이 저장소 job 끼리만 순서를 맞춘다(concurrency 와 같은 일).
+
+그래서 두 저장소가 동시에 보드를 열 수 있다. 겹치면 둘 다 CMA 부족이나 VTA 오류로
+실패하고 CMA 가 새어 재부팅이 필요할 수 있다. 이 저장소에서 수동 실행하기 전에
+nest-compiler Actions 에 test-board 가 돌고 있지 않은지 본다.
 
 트리를 저장소마다 따로 둔 것은 한쪽이 다른 커밋으로 checkout 해도 다른 쪽이
 흔들리지 않게 하려는 것이다.
