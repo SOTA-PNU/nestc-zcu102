@@ -1,6 +1,6 @@
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  2 97.7M    2 2237k    0     0  4565k      0  0:00:21 --:--:--  0:00:21 4556k 39 97.7M   39 38.5M    0     0  25.9M      0  0:00:03  0:00:01  0:00:02 25.8M 75 97.7M   75 73.5M    0     0  29.4M      0  0:00:03  0:00:02  0:00:01 29.4M100 97.7M  100 97.7M    0     0  30.6M      0  0:00:03  0:00:03 --:--:-- 30.6M
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 11 97.7M   11 11.5M    0     0  15.5M      0  0:00:06 --:--:--  0:00:06 15.5M 47 97.7M   47 46.2M    0     0  26.7M      0  0:00:03  0:00:01  0:00:02 26.6M 82 97.7M   82 80.9M    0     0  29.5M      0  0:00:03  0:00:02  0:00:01 29.5M100 97.7M  100 97.7M    0     0  30.4M      0  0:00:03  0:00:03 --:--:-- 30.4M
 == 모델 resnet50
    ONNX   /work/bundle-out/resnet50/resnet50.onnx
    이미지 1장
@@ -11,29 +11,29 @@ Running 1 thread(s).
    calib.yaml 2383 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1106 03:52:53.005510    27 HostManager.cpp:242] Destroying host manager...
+I1106 08:16:36.775007    27 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 resnet50, 출력 gpu_0_softmax_1)
           범위 0~1.0, 채널 BGR, 정규화 0, 레이아웃 NCHW
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 == 완료
 total 125356
-drwxr-xr-x 2 1004 1004      4096 Nov  6 03:52 .
-drwxr-xr-x 4 1004 1004      4096 Nov  6 03:52 ..
--rw-r--r-- 1 1004 1004     16134 Nov  6 03:52 Main.cpp
--rw-r--r-- 1 1004 1004      3762 Nov  6 03:52 VTARuntime.h
--rw-r--r-- 1 1004 1004        67 Nov  6 03:52 bundle.conf
--rw-r--r-- 1 1004 1004    117393 Nov  6 03:52 calib.yaml
--rw-r--r-- 1 1004 1004     98284 Nov  6 03:52 resnet50.cpp
--rw-r--r-- 1 1004 1004      2070 Nov  6 03:52 resnet50.h
--rw-r--r-- 1 1004 1004 102490289 Nov  6 03:52 resnet50.onnx
--rw-r--r-- 1 1004 1004  25613152 Nov  6 03:52 resnet50.weights.bin
+drwxr-xr-x 2 1004 1004      4096 Nov  6 08:16 .
+drwxr-xr-x 4 1004 1004      4096 Nov  6 08:16 ..
+-rw-r--r-- 1 1004 1004     16134 Nov  6 08:16 Main.cpp
+-rw-r--r-- 1 1004 1004      3762 Nov  6 08:16 VTARuntime.h
+-rw-r--r-- 1 1004 1004        67 Nov  6 08:16 bundle.conf
+-rw-r--r-- 1 1004 1004    117393 Nov  6 08:16 calib.yaml
+-rw-r--r-- 1 1004 1004     98284 Nov  6 08:16 resnet50.cpp
+-rw-r--r-- 1 1004 1004      2070 Nov  6 08:16 resnet50.h
+-rw-r--r-- 1 1004 1004 102490289 Nov  6 08:16 resnet50.onnx
+-rw-r--r-- 1 1004 1004  25613152 Nov  6 08:16 resnet50.weights.bin
 == 번들 resnet50  소스 resnet50.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_aarch64/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_aarch64/vta/vtalib/libvta_runtime.a
    ACL         3개
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dlpack/include
    (경고) 없는 인클루드 경로 /home/xilinx/nest-compiler-2024/vta/3rdparty/dmlc-core/include
-   CMA 여유 253196 kB (필요 추정 80000 kB, 단일 코어)
+   CMA 여유 253308 kB (필요 추정 80000 kB, 단일 코어)
 == 컴파일
 Main.cpp: In function ‘int main(int, char**)’:
 Main.cpp:455:72: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
@@ -51,8 +51,8 @@ Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
                  ^~~~~~~~~~~~~~~~~~~~~
 == 링크
 == 실행
-   OK   cat_285  281  (0.001961, 419.576ms)
-   OK   dog_207  207  (0.002554, 418.152ms)
-   OK   zebra_340  340  (0.002706, 418.159ms)
-   CMA 여유 252792 kB (실행 뒤)
+   OK   cat_285  281  (0.001961, 418.265ms)
+   OK   dog_207  207  (0.002554, 421.327ms)
+   OK   zebra_340  340  (0.002706, 418.642ms)
+   CMA 여유 252788 kB (실행 뒤)
 == 전부 통과

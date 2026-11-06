@@ -1,4 +1,5 @@
 상류 그대로: 214c04b Merge pull request #4 from SOTA-PNU/feature/add-ssd300
+SHA=214c04b1b59e3dce0dad055f71f950a2fbf40eb0
 이미 패치됨 — 건너뜀
 전부 이미 패치되어 있다.
 경고: 기준 구현과 다름, 건너뜀 — vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp

@@ -8,22 +8,22 @@ Running 1 thread(s).
    calib.yaml 564 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1106 03:52:32.337387    24 HostManager.cpp:242] Destroying host manager...
+I1106 08:16:15.055348    24 HostManager.cpp:242] Destroying host manager...
    main   틀에서 생성 (접두사 mxnet_exported_resnet18, 출력 resnetv10_dense0_fwd__1)
           범위 0~255.0, 채널 RGB, 정규화 0, 레이아웃 NHWC
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 "resnetv10_dense0_fwd__1"
 == 완료
 total 11828
-drwxr-xr-x 2 1004 1004     4096 Nov  6 03:52 .
-drwxr-xr-x 3 1004 1004     4096 Nov  6 03:52 ..
--rw-r--r-- 1 1004 1004    16320 Nov  6 03:52 Main.cpp
--rw-r--r-- 1 1004 1004     3762 Nov  6 03:52 VTARuntime.h
--rw-r--r-- 1 1004 1004       67 Nov  6 03:52 bundle.conf
--rw-r--r-- 1 1004 1004    26211 Nov  6 03:52 calib.yaml
--rw-r--r-- 1 1004 1004    40446 Nov  6 03:52 mxnet_exported_resnet18.cpp
--rw-r--r-- 1 1004 1004     2190 Nov  6 03:52 mxnet_exported_resnet18.h
--rw-r--r-- 1 1004 1004 12003168 Nov  6 03:52 mxnet_exported_resnet18.weights.bin
+drwxr-xr-x 2 1004 1004     4096 Nov  6 08:16 .
+drwxr-xr-x 3 1004 1004     4096 Nov  6 08:16 ..
+-rw-r--r-- 1 1004 1004    16320 Nov  6 08:16 Main.cpp
+-rw-r--r-- 1 1004 1004     3762 Nov  6 08:16 VTARuntime.h
+-rw-r--r-- 1 1004 1004       67 Nov  6 08:16 bundle.conf
+-rw-r--r-- 1 1004 1004    26211 Nov  6 08:16 calib.yaml
+-rw-r--r-- 1 1004 1004    40446 Nov  6 08:16 mxnet_exported_resnet18.cpp
+-rw-r--r-- 1 1004 1004     2190 Nov  6 08:16 mxnet_exported_resnet18.h
+-rw-r--r-- 1 1004 1004 12003168 Nov  6 08:16 mxnet_exported_resnet18.weights.bin
 == 번들 resnet18  소스 mxnet_exported_resnet18.cpp
    VTABundle   /home/xilinx/nest-compiler-2024/build_aarch64/vta/vtalib/libVTABundle.a
    vta_runtime /home/xilinx/nest-compiler-2024/build_aarch64/vta/vtalib/libvta_runtime.a
@@ -48,8 +48,8 @@ Main.cpp:366:17: warning: ‘uint8_t* copyMutableWeightVars(const BundleConfig&,
                  ^~~~~~~~~~~~~~~~~~~~~
 == 링크
 == 실행
-   OK   cat_285  281  (0.478113, 91.739ms)
-   OK   dog_207  207  (0.977876, 91.54ms)
-   OK   zebra_340  340  (0.969942, 91.445ms)
-   CMA 여유 252820 kB (실행 뒤)
+   OK   cat_285  281  (0.478113, 91.504ms)
+   OK   dog_207  207  (0.977876, 91.43ms)
+   OK   zebra_340  340  (0.969942, 91.653ms)
+   CMA 여유 252836 kB (실행 뒤)
 == 전부 통과
