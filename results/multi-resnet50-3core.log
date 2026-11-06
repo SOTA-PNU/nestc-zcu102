@@ -1,6 +1,6 @@
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  1 97.7M    1 1027k    0     0  1838k      0  0:00:54 --:--:--  0:00:54 1835k 40 97.7M   40 39.6M    0     0  25.4M      0  0:00:03  0:00:01  0:00:02 25.4M 75 97.7M   75 74.2M    0     0  29.0M      0  0:00:03  0:00:02  0:00:01 29.0M100 97.7M  100 97.7M    0     0  30.2M      0  0:00:03  0:00:03 --:--:-- 30.2M
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 34 97.7M   34 33.4M    0     0  27.9M      0  0:00:03  0:00:01  0:00:02 27.9M 69 97.7M   69 68.3M    0     0  31.0M      0  0:00:03  0:00:02  0:00:01 31.0M100 97.7M  100 97.7M    0     0  32.1M      0  0:00:03  0:00:03 --:--:-- 32.1M
 == 모델 resnet50-3core
    ONNX   /work/multi-out/resnet50-3core/resnet50.onnx
    이미지 1장
@@ -11,13 +11,13 @@ Running 1 thread(s).
    calib.yaml 2383 줄
 == 2단계 번들 생성
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1104 10:40:45.026489    27 HostManager.cpp:242] Destroying host manager...
+I1106 05:13:58.130440    27 HostManager.cpp:242] Destroying host manager...
 == 2-b단계 멀티 EVTA 번들 (코어 3개)
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1104 10:40:45.731851    35 HostManager.cpp:242] Destroying host manager...
+I1106 05:13:58.849036    35 HostManager.cpp:242] Destroying host manager...
    코어 1  resnet50_1.cpp  (마스크 2)
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1104 10:40:46.428915    38 HostManager.cpp:242] Destroying host manager...
+I1106 05:13:59.557358    38 HostManager.cpp:242] Destroying host manager...
    코어 2  resnet50_2.cpp  (마스크 4)
    main   틀에서 생성 (접두사 resnet50, 출력 gpu_0_softmax_1)
           범위 0~1.0, 채널 BGR, 정규화 0, 레이아웃 NCHW
@@ -25,78 +25,28 @@ I1104 10:40:46.428915    38 HostManager.cpp:242] Destroying host manager...
 == 번들이 내보내는 심볼 (OUTPUT_NAME 후보)
 == 완료
 total 175604
-drwxr-xr-x 2 1004 1004      4096 Nov  4 10:40 .
-drwxr-xr-x 5 1004 1004      4096 Nov  4 10:40 ..
--rw-r--r-- 1 1004 1004     20961 Nov  4 10:40 Main.cpp
--rw-r--r-- 1 1004 1004      3762 Nov  4 10:40 VTARuntime.h
--rw-r--r-- 1 1004 1004        36 Nov  4 10:40 bundle.conf
--rw-r--r-- 1 1004 1004    117393 Nov  4 10:40 calib.yaml
--rw-r--r-- 1 1004 1004     98265 Nov  4 10:40 resnet50.cpp
--rw-r--r-- 1 1004 1004      2070 Nov  4 10:40 resnet50.h
--rw-r--r-- 1 1004 1004 102490289 Nov  4 10:40 resnet50.onnx
--rw-r--r-- 1 1004 1004  25613152 Nov  4 10:40 resnet50.weights.bin
--rw-r--r-- 1 1004 1004     98336 Nov  4 10:40 resnet50_1.cpp
--rw-r--r-- 1 1004 1004      2086 Nov  4 10:40 resnet50_1.h
--rw-r--r-- 1 1004 1004  25613152 Nov  4 10:40 resnet50_1.weights.bin
--rw-r--r-- 1 1004 1004     98336 Nov  4 10:40 resnet50_2.cpp
--rw-r--r-- 1 1004 1004      2086 Nov  4 10:40 resnet50_2.h
--rw-r--r-- 1 1004 1004  25613152 Nov  4 10:40 resnet50_2.weights.bin
+drwxr-xr-x 2 1004 1004      4096 Nov  6 05:13 .
+drwxr-xr-x 5 1004 1004      4096 Nov  6 05:13 ..
+-rw-r--r-- 1 1004 1004     20961 Nov  6 05:13 Main.cpp
+-rw-r--r-- 1 1004 1004      3762 Nov  6 05:13 VTARuntime.h
+-rw-r--r-- 1 1004 1004        36 Nov  6 05:13 bundle.conf
+-rw-r--r-- 1 1004 1004    117393 Nov  6 05:13 calib.yaml
+-rw-r--r-- 1 1004 1004     98284 Nov  6 05:13 resnet50.cpp
+-rw-r--r-- 1 1004 1004      2070 Nov  6 05:13 resnet50.h
+-rw-r--r-- 1 1004 1004 102490289 Nov  6 05:13 resnet50.onnx
+-rw-r--r-- 1 1004 1004  25613152 Nov  6 05:13 resnet50.weights.bin
+-rw-r--r-- 1 1004 1004     98355 Nov  6 05:13 resnet50_1.cpp
+-rw-r--r-- 1 1004 1004      2086 Nov  6 05:13 resnet50_1.h
+-rw-r--r-- 1 1004 1004  25613152 Nov  6 05:13 resnet50_1.weights.bin
+-rw-r--r-- 1 1004 1004     98355 Nov  6 05:13 resnet50_2.cpp
+-rw-r--r-- 1 1004 1004      2086 Nov  6 05:13 resnet50_2.h
+-rw-r--r-- 1 1004 1004  25613152 Nov  6 05:13 resnet50_2.weights.bin
 == 멀티 EVTA 번들 resnet50-3core  (코어 3개)
    resnet50_1.cpp
    resnet50_2.cpp
    resnet50.cpp
-   CMA 여유 253300 kB (필요 추정 177340 kB, 코어 3개, 가중치 25012 kB)
-== 컴파일 (번들 네 벌이라 단일보다 오래 걸린다)
-Main.cpp: In function ‘void* thread_main(void*)’:
-Main.cpp:483:56: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-                                       "gpu_0_softmax_1");
-                                                        ^
-Main.cpp: In function ‘void* thread_main1(void*)’:
-Main.cpp:527:56: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-                                       "gpu_0_softmax_1");
-                                                        ^
-Main.cpp: In function ‘void* thread_main2(void*)’:
-Main.cpp:570:56: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-                                       "gpu_0_softmax_1");
-                                                        ^
-Main.cpp: In function ‘int main(int, char**)’:
-Main.cpp:602:71: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-       (uint8_t *)initMutableWeightVars(resnet50_config, "gpu_0_data_0");
-                                                                       ^
-Main.cpp:614:73: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-       (uint8_t *)initMutableWeightVars(resnet50_1_config, "gpu_0_data_0");
-                                                                         ^
-Main.cpp:626:73: warning: ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
-       (uint8_t *)initMutableWeightVars(resnet50_2_config, "gpu_0_data_0");
-                                                                         ^
-== 링크
-== 실행 (네 코어 동시)
--- CMA 현황 --
-CmaTotal:         262144 kB
-CmaFree:          253300 kB
--- 번들당 요구량 --
-   resnet50_1.h                             // Total data size: 606112(bytes)
-   resnet50_2.h                             // Total data size: 606112(bytes)
-   resnet50.h                               // Total data size: 606112(bytes)
-   /home/xilinx/bundles/multi-resnet50-3core/resnet50_1.weights.bin 25613152 bytes
-   /home/xilinx/bundles/multi-resnet50-3core/resnet50_2.weights.bin 25613152 bytes
-   /home/xilinx/bundles/multi-resnet50-3core/resnet50.weights.bin 25613152 bytes
-/home/xilinx/board-multi-run.sh: line 183:  9122 Terminated              ( for i in $(seq 1 40);
-do
-    grep -i '^CmaFree' /proc/meminfo | awk '{print $2}'; sleep 3;
-done ) > /tmp/cma_samples.txt 2> /dev/null
--- CMA 실측 --
-   실행 중 최저 여유 78716 kB
-   사용량 174584 kB  (코어당 약 58194 kB)
-95
-96
-97
-98
-99
-100
-101
-Inference time: 17869.8ms
-== 전부 통과
-   총 17869.8ms / 100장
-   장당 178.7ms (벽시계 기준)
-   처리량 5.60 img/s
+   CMA 여유 150528 kB (필요 추정 177340 kB, 코어 3개, 가중치 25012 kB)
+
+== 중단  CMA 가 모자란다
+   추론이 비정상 종료되면 FPGA 메모리가 반납되지 않는다.
+   GitHub Actions 의 board-recover 워크플로를 reboot 로 돌린 뒤 다시 시도한다.
