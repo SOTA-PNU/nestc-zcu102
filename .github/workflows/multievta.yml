@@ -58,6 +58,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 보드 잠금 — 같은 서버의 nest-compiler 러너(test-board)와 보드를 번갈아 쓴다.
+      # concurrency 는 저장소마다 따로라 이것이 없으면 두 저장소가 동시에 VTA 를 연다.
+      - name: 보드 잠금
+        run: bash scripts/board-lock.sh acquire
+
       - name: 돌릴 모델 정하기
         run: |
           set -eu
@@ -94,11 +99,14 @@ jobs:
         run: |
           set -eu
           UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
+          # 상류(SOTA-PNU/nest-compiler)를 ci/upstream.ref 커밋에 맞춘다. 같으면 그대로 둔다.
+          bash scripts/sync-upstream.sh "$UP" "$(cat ci/upstream.ref)"
+          echo "UPSTREAM_REF=$(cat ci/upstream.ref)" >> "$GITHUB_ENV"
           [ -d "$UP/build" ] || { echo "상류 빌드 트리가 없다: $UP/build" >&2; exit 1; }
           echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
           echo "TOOLS_IN_CONTAINER=/src/build/glow/bin" >> "$GITHUB_ENV"
           docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 || docker pull "$DOCKER_IMAGE"
-          for p in ci/patch_concat.py ci/patch_tiling.py; do
+          for p in ci/patch_tiling.py; do
             [ -f "$p" ] && python3 "$p" "$UP"
           done
           docker run --rm -v "$UP":/root/nestc -w /root/nestc/build \
@@ -126,8 +134,12 @@ jobs:
           # 패치는 멱등하고 make 는 증분이라 다시 돌려도 안전하다.
           for try in 1 2 3; do
             [ "$try" = 1 ] || echo "== SSH 재시도 $try"
-          scp ci/patch_relu_rescale.py ci/patch_vta_max_xfer.py board:/home/xilinx/
+          scp ci/patch_transpose.py ci/patch_relu_rescale.py ci/patch_vta_max_xfer.py \
+            scripts/sync-upstream.sh board:/home/xilinx/
           ssh board "set -euo pipefail
+            bash /home/xilinx/sync-upstream.sh /home/xilinx/nest-compiler-2024 $UPSTREAM_REF board
+            python3 /home/xilinx/patch_transpose.py \
+              /home/xilinx/nest-compiler-2024/vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
             python3 /home/xilinx/patch_relu_rescale.py /home/xilinx/nest-compiler-2024
             python3 /home/xilinx/patch_vta_max_xfer.py /home/xilinx/nest-compiler-2024
             echo '--- 적용된 VTA_MAX_XFER ---'
@@ -257,6 +269,10 @@ jobs:
           name: multievta-${{ github.run_id }}
           path: logs/
           retention-days: 30
+
+      - name: 보드 잠금 해제
+        if: always()
+        run: bash scripts/board-lock.sh release
 
       - name: 키 정리
         if: always()

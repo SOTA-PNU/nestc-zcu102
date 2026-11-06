@@ -3,6 +3,12 @@
 ETRI 의 NEST-C 컴파일러로 ZCU102 보드의 VTA/EVTA NPU 에 모델을 올리고,
 그 과정을 GitHub Actions 로 자동화한 것이다. 답은 한국어로 한다.
 
+**2026-11-06 부터 개인 공부·연구용 저장소다.** 상류는 ETRI 원본이 아니라
+SOTA-PNU/nest-compiler 의 `ci/upstream.ref` 커밋이다. 연구실 공식 보드 CI 는
+nest-compiler 의 `build.yml` → `test-board` 다. 같은 서버의 두 러너가 보드를
+`scripts/board-lock.sh` 로 번갈아 쓴다 — 보드를 쓰는 새 workflow 에는 반드시
+잠금 단계를 넣는다. 자세한 것은 `docs/15-nest-compiler-ci.md`.
+
 **먼저 `NEXT.md` 를 읽는다.** 남은 일이 거기 있다.
 
 ---
@@ -147,7 +153,8 @@ ssh -p 25022 xilinx@sota.pusan.ac.kr 'sudo reboot'
 | `board-health` | 2시간마다 보드 점검 |
 
 **보드는 한 대뿐이라 전부 `concurrency: zcu102-board` 로 묶여 순서대로
-돈다.** GitHub 클라우드 러너는 교내 방화벽 때문에 보드에 못 닿는다
+돈다.** 이 그룹은 저장소 안에서만 통한다. nest-compiler 의 `test-board` 와는
+서버의 `~/.zcu102-board.lock`(`scripts/board-lock.sh`)으로 순서를 맞춘다. GitHub 클라우드 러너는 교내 방화벽 때문에 보드에 못 닿는다
 (종료 코드 255). 전부 self-hosted 여야 한다.
 
 상류 패치는 **손으로 고치지 않고 `ci/patch_*.py` 로 유지한다.** 매 실행마다

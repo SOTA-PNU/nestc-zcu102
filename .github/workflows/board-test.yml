@@ -57,6 +57,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      # 보드 잠금 — 같은 서버의 nest-compiler 러너(test-board)와 보드를 번갈아 쓴다.
+      # concurrency 는 저장소마다 따로라 이것이 없으면 두 저장소가 동시에 VTA 를 연다.
+      - name: 보드 잠금
+        run: bash scripts/board-lock.sh acquire
+
       - name: SSH 준비
         run: |
           set -eu
@@ -76,16 +81,11 @@ jobs:
           chmod 600 ~/.ssh/config
           ssh board 'uname -a; free -h | head -2; df -h / | tail -1'
 
-      - name: 상류 소스 갱신
+      # 상류는 SOTA-PNU/nest-compiler 의 ci/upstream.ref 커밋이다(2026-11-06 ETRI 에서 바꿈).
+      - name: 상류 소스 맞추기
         run: |
-          ssh board "set -eu
-            if [ ! -d $SRC/.git ]; then
-              git clone --recursive https://gitlab.com/ones-ai/nest-compiler.git $SRC
-            else
-              cd $SRC && git fetch origin && git reset --hard origin/main \
-                && git submodule update --init --recursive
-            fi
-            cd $SRC && git log --oneline -1"
+          scp scripts/sync-upstream.sh board:/home/xilinx/
+          ssh board "bash /home/xilinx/sync-upstream.sh $SRC $(cat ci/upstream.ref) board"
 
       # 상류 vtalib 의 transpose() 가 미구현 스텁이라
       # aarch64 경로에서 입력과 무관한 고정 출력이 나온다.
@@ -221,6 +221,10 @@ jobs:
           name: board-test-${{ matrix.impl }}
           path: logs/
           retention-days: 30
+
+      - name: 보드 잠금 해제
+        if: always()
+        run: bash scripts/board-lock.sh release
 
       - name: 키 정리
         if: always()

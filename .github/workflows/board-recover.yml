@@ -47,6 +47,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 보드 잠금 — 같은 서버의 nest-compiler 러너(test-board)와 보드를 번갈아 쓴다.
+      # concurrency 는 저장소마다 따로라 이것이 없으면 두 저장소가 동시에 VTA 를 연다.
+      - name: 보드 잠금
+        run: bash scripts/board-lock.sh acquire
+
       - name: SSH 준비
         run: |
           set -eu
@@ -141,6 +146,10 @@ jobs:
           git push origin HEAD:main || echo "푸시 실패 — 아래 내용을 직접 읽어야 한다"
           echo "--- results/board-recover.md ---"
           cat results/board-recover.md
+
+      - name: 보드 잠금 해제
+        if: always()
+        run: bash scripts/board-lock.sh release
 
       - name: 키 정리
         if: always()
