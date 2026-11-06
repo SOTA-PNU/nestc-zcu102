@@ -10,6 +10,8 @@ Meta의 Glow를 기반으로 NPU용 코드를 생성하는 딥러닝 컴파일�
 > - 상류는 ETRI 원본에서 연구실 저장소 [SOTA-PNU/nest-compiler](https://github.com/SOTA-PNU/nest-compiler) 로
 >   바꿨다. 쓰는 커밋은 [`ci/upstream.ref`](ci/upstream.ref) 한 줄이다. 올리려면 그 커밋만 바꿔 푸시한다.
 > - 연구실 공식 보드 CI 는 nest-compiler 의 `build.yml` → `test-board` job 이다.
+> - 컴파일러 수정은 포크 [udonghun/nest-compiler](https://github.com/udonghun/nest-compiler) 브랜치에서 만들고,
+>   model-test / multievta 를 입력 `ref` 로 돌려 보드에서 시험한 뒤 통과한 것만 nest-compiler 에 PR 로 올린다.
 > - 같은 서버의 두 러너가 보드 한 대를 [`scripts/board-lock.sh`](scripts/board-lock.sh) 잠금으로 번갈아 쓴다.
 > - 2026-11-05 이전의 수치와 문서는 ETRI 원본(`7326f0d`) 기준이다. nest-compiler `214c04b` 에서도
 >   ResNet-18/50 결과가 같았다([docs/15](docs/15-nest-compiler-ci.md)).

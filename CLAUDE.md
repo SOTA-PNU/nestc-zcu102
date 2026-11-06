@@ -9,6 +9,11 @@ nest-compiler 의 `build.yml` → `test-board` 다. 같은 서버의 두 러너�
 `scripts/board-lock.sh` 로 번갈아 쓴다 — 보드를 쓰는 새 workflow 에는 반드시
 잠금 단계를 넣는다. 자세한 것은 `docs/15-nest-compiler-ci.md`.
 
+**컴파일러를 고치는 순서 (2026-11-06~):** 포크 `udonghun/nest-compiler` 에 브랜치로
+올린다 → 이 저장소의 model-test / multievta 를 입력 `ref=<브랜치>` 로 수동 실행해
+보드에서 시험한다 → 통과한 것만 SOTA-PNU/nest-compiler 에 PR 을 연다. 시험 중인 것을
+nest-compiler 에 바로 올리지 않는다(그쪽 Actions 와 compute-nestc 를 쓰지 않게).
+
 **먼저 `NEXT.md` 를 읽는다.** 남은 일이 거기 있다.
 
 ---

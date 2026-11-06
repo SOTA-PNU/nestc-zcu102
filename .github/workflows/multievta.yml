@@ -28,6 +28,10 @@ on:
       - ".github/workflows/multievta.yml"
   workflow_dispatch:
     inputs:
+      ref:
+        description: "포크 udonghun/nest-compiler 의 브랜치나 커밋 (비우면 ci/upstream.ref)"
+        type: string
+        default: ""
       model:
         description: "models-multi/ 아래 conf 이름 (비우면 전부)"
         type: string
@@ -96,12 +100,15 @@ jobs:
           ssh board 'uname -m; free -h | head -2'
 
       - name: 컴파일러 준비
+        env:
+          IN_REF: ${{ inputs.ref }}
         run: |
           set -eu
           UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
-          # 상류(SOTA-PNU/nest-compiler)를 ci/upstream.ref 커밋에 맞춘다. 같으면 그대로 둔다.
-          bash scripts/sync-upstream.sh "$UP" "$(cat ci/upstream.ref)"
-          echo "UPSTREAM_REF=$(cat ci/upstream.ref)" >> "$GITHUB_ENV"
+          # 상류를 수동 실행 입력 ref(포크 udonghun/nest-compiler 의 브랜치·커밋)에,
+          # 비었으면 ci/upstream.ref 에 맞춘다. 같으면 그대로 둔다.
+          bash scripts/sync-upstream.sh "$UP" "${IN_REF:-$(cat ci/upstream.ref)}"
+          echo "UPSTREAM_REF=$(git -C "$UP" rev-parse HEAD)" >> "$GITHUB_ENV"
           [ -d "$UP/build" ] || { echo "상류 빌드 트리가 없다: $UP/build" >&2; exit 1; }
           echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
           echo "TOOLS_IN_CONTAINER=/src/build/glow/bin" >> "$GITHUB_ENV"
@@ -236,6 +243,7 @@ jobs:
             echo ""
             echo "- 시각: $(date -u '+%Y-%m-%d %H:%M UTC')"
             echo "- 커밋: ${GITHUB_SHA:0:8}"
+            echo "- 상류: ${UPSTREAM_REF:0:12}"
             echo "- 실행: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ""
             echo "단일 코어 기준값은 results/latest.md 의 장당 시간과 비교한다."

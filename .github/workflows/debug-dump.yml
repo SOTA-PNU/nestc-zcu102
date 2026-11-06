@@ -14,6 +14,10 @@ name: debug-dump
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: "포크 udonghun/nest-compiler 의 브랜치나 커밋 (비우면 ci/upstream.ref)"
+        type: string
+        default: ""
       model:
         description: "models/ 또는 models-off/ 아래 conf 이름 (확장자 제외)"
         type: string
@@ -67,12 +71,15 @@ jobs:
           ssh board 'uname -m'
 
       - name: 컴파일러 준비
+        env:
+          IN_REF: ${{ inputs.ref }}
         run: |
           set -eu
           UP=${NESTC_UPSTREAM:-$HOME/nestc-upstream}
-          # 상류(SOTA-PNU/nest-compiler)를 ci/upstream.ref 커밋에 맞춘다. 같으면 그대로 둔다.
-          bash scripts/sync-upstream.sh "$UP" "$(cat ci/upstream.ref)"
-          echo "UPSTREAM_REF=$(cat ci/upstream.ref)" >> "$GITHUB_ENV"
+          # 상류를 수동 실행 입력 ref(포크 udonghun/nest-compiler 의 브랜치·커밋)에,
+          # 비었으면 ci/upstream.ref 에 맞춘다. 같으면 그대로 둔다.
+          bash scripts/sync-upstream.sh "$UP" "${IN_REF:-$(cat ci/upstream.ref)}"
+          echo "UPSTREAM_REF=$(git -C "$UP" rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "NESTC_UPSTREAM=$UP" >> "$GITHUB_ENV"
           echo "TOOLS_IN_CONTAINER=/src/build/glow/bin" >> "$GITHUB_ENV"
           docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 || docker pull "$DOCKER_IMAGE"

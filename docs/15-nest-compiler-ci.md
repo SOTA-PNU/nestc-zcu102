@@ -24,6 +24,30 @@ job 이 처음에 `scripts/board-lock.sh acquire`, 끝에 `release`(always)를 �
 트리를 저장소마다 따로 둔 것은 한쪽이 다른 커밋으로 checkout 해도 다른 쪽이
 흔들리지 않게 하려는 것이다.
 
+## 고치는 순서: 포크 → 여기서 시험 → nest-compiler (2026-11-06~)
+
+```
+udonghun/nest-compiler (포크) 브랜치에 푸시
+        │
+        ▼
+nestc-zcu102 model-test / multievta  ── 수동 실행, 입력 ref=<브랜치 또는 커밋>
+        │  서버 ~/nestc-upstream 를 그 커밋으로 맞추고 ninja 증분 빌드
+        │  보드 ~/nest-compiler-2024 도 같은 커밋(vtalib 포함)으로 맞추고 make
+        ▼
+통과하면 → SOTA-PNU/nest-compiler 에 PR → 그쪽 build.yml (test-board 포함)
+실패하면 → 포크에서 고쳐 다시 시험. nest-compiler 에는 올리지 않는다.
+```
+
+- `scripts/sync-upstream.sh` 는 포크에서 먼저 찾고 없으면 원본에서 찾는다. 브랜치
+  이름을 받으면 서버가 맞춘 커밋(40자)을 `UPSTREAM_REF` 로 보드에 넘겨 둘이 같은
+  커밋을 쓴다. 결과 기록(`results/latest.md`, `results/multievta.md`)에 `상류:` 줄이 남는다.
+- `ref` 를 비우면 예전처럼 `ci/upstream.ref` 커밋이다. 포크 시험 뒤에는 트리가 그
+  커밋에 남아 있으므로, 다음 기본 실행이 자동으로 `ci/upstream.ref` 로 되돌린다.
+- 포크는 원본 `main` 을 따라가지 않는다. 원본이 앞서가면 포크 화면의 **Sync fork** 를 누르거나
+  브랜치를 원본 `main` 위로 rebase 한다.
+- vta/vtalib 은 서브모듈(SOTA-PNU/vta_lib)이다. vtalib 을 고칠 일이 생기면 그것도 포크해서
+  포크 브랜치의 `.gitmodules` 를 잠시 그쪽으로 돌린다(아직 해 본 적 없다).
+
 ## 이 저장소의 상류 교체 (2026-11-06)
 
 - 서버 `~/nestc-upstream`: ETRI `3951ea4` → nest-compiler `214c04b`.
