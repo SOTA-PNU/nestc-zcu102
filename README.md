@@ -6,14 +6,11 @@ Xilinx ZCU102 보드의 FPGA에 올라간 **VTA(NPU)** 에서 CNN 추론을 실�
 컴파일러는 ETRI의 [NEST-C](https://github.com/etri/nest-compiler) —
 Meta의 Glow를 기반으로 NPU용 코드를 생성하는 딥러닝 컴파일러다.
 
-> **이 저장소는 개인 공부·연구용이다 (2026-11-06~).**
-> - 상류는 ETRI 원본에서 연구실 저장소 [SOTA-PNU/nest-compiler](https://github.com/SOTA-PNU/nest-compiler) 로
->   바꿨다. 쓰는 커밋은 [`ci/upstream.ref`](ci/upstream.ref) 한 줄이다. 올리려면 그 커밋만 바꿔 푸시한다.
-> - 연구실 공식 보드 CI 는 nest-compiler 의 `build.yml` → `test-board` job 이다.
-> - 컴파일러 수정은 포크 [udonghun/nest-compiler](https://github.com/udonghun/nest-compiler) 브랜치에서 만들고,
->   model-test / multievta 를 입력 `ref` 로 돌려 보드에서 시험한 뒤 성과(속도·CMA·정확도 개선)가 있는 것만 nest-compiler 에 PR 로 올린다.
-> - 같은 서버의 두 러너가 보드 한 대를 쓴다. nest-compiler 쪽은 잠금 없이 돌므로, 여기서 보드 작업을 돌리기 전에
->   그쪽 test-board 가 돌고 있지 않은지 본다.
+> **2026-11-06 부터 이 저장소에는 CI 가 없다.**
+> - 보드 CI 는 [SOTA-PNU/nest-compiler](https://github.com/SOTA-PNU/nest-compiler)(공식)와
+>   포크 [udonghun/nest-compiler](https://github.com/udonghun/nest-compiler) 의 `build.yml` → `test-board` 둘이다.
+> - 이 저장소 workflow 는 비활성화했다. 대신 두 test-board 가 이 저장소의 `scripts/`, `models*/`, `ci/patch_*.py` 를 가져다 쓴다.
+> - 컴파일러 수정은 포크 브랜치에서 보드로 시험하고, 성과(속도·CMA·정확도 개선)가 있는 것만 공식 저장소에 올린다.
 > - 2026-11-05 이전의 수치와 문서는 ETRI 원본(`7326f0d`) 기준이다. nest-compiler `214c04b` 에서도
 >   ResNet-18/50 결과가 같았다([docs/15](docs/15-nest-compiler-ci.md)).
 

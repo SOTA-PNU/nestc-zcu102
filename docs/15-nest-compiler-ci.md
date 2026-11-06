@@ -4,59 +4,51 @@
 ETRI NEST-C 를 옮겨 와 고치고 있는 연구실 저장소다(vta/vtalib 은
 [SOTA-PNU/vta_lib](https://github.com/SOTA-PNU/vta_lib)).
 
-## 지금 구조 (2026-11-06)
+## 지금 구조 (2026-11-06 저녁)
 
-| | SOTA-PNU/nest-compiler | SOTA-PNU/nestc-zcu102 (이 저장소) |
+보드 CI 는 둘이다. 둘 다 `build.yml` 의 `test-board` job 이고 연구실 서버(sota-AIP, ehdgns)의
+러너에서 돈다.
+
+| | SOTA-PNU/nest-compiler | udonghun/nest-compiler (포크) |
 |---|---|---|
-| 성격 | 연구실 공식 컴파일러 | 개인 공부·연구용 |
-| 보드 CI | `build.yml` → `test-board` job | model-test, multievta, board-test, debug-dump, ... |
-| 러너 | `sota-aip-zcu102` (`~/actions-runner-nc`, label `zcu102`) | `sota-aip` (`~/actions-runner`) |
-| 서버 트리 | `~/nestc-sota` (커밋마다 바꿈) | `~/nestc-upstream` (`ci/upstream.ref` 고정) |
-| 보드 트리 | `~/nest-compiler-sota` | `~/nest-compiler-2024` |
-| 보드 키 | 서버 `~/.ssh/zcu102_key` | 시크릿 `BOARD_SSH_KEY` |
+| 성격 | 연구실 공식 컴파일러 | 개인 실험장 |
+| 언제 도나 | main 푸시, 같은 저장소 브랜치의 PR | 아무 브랜치 푸시, PR |
+| build(컴파일·단위 테스트) | compute-nestc 에서 돈 뒤 test-board | 건너뜀(포크엔 그 러너가 없다) |
+| 러너 | `sota-aip-zcu102` (`~/actions-runner-nc`) | `sota-aip-fork` (`~/actions-runner-fork`) |
+| 서버 트리 / 보드 트리 | `~/nestc-sota` / `~/nest-compiler-sota` | 같은 트리를 쓴다 |
+| 진행 중 실행 취소 | PR 브랜치 새 푸시 때 취소된다(주의) | 취소하지 않는다 |
 
-두 러너 모두 연구실 서버(sota-AIP, ehdgns)에 있고 보드는 한 대다. GitHub 의
-`concurrency` 는 저장소마다 따로라 서로를 기다리지 않는다.
+- 두 test-board 모두 이 저장소(nestc-zcu102) main 을 checkout 해서 스크립트·모델·패치를 쓴다.
+  **이 저장소 main 에 푸시하면 두 CI 에 바로 반영된다.**
+- 이 저장소의 workflow 8개는 2026-11-06 에 GitHub 에서 비활성화했다(파일은 남김,
+  Actions 화면에서 다시 켤 수 있다). 러너 `sota-aip`(`~/actions-runner`)도 내렸다.
+- 두 러너는 서로를 기다리지 않는다(concurrency 는 저장소마다 따로, 보드 잠금은 쓰지 않기로 함).
+  동시에 돌면 보드에서 겹쳐 둘 다 실패하고 CMA 가 새어 재부팅이 필요할 수 있다.
+  서버 트리도 같은 것을 쓰므로 동시에 돌면 서로의 checkout 을 바꾼다.
 
-서버 잠금(`scripts/board-lock.sh`, `~/.zcu102-board.lock`)을 만들어 nest-compiler 의
-test-board 에도 넣었다가 **2026-11-06 에 nest-compiler 쪽에서는 뺐다**(PR #6, 1056a59).
-공식 저장소에 개인 저장소의 장치를 넣지 않기로 했기 때문이다. 이 저장소 workflow 에는
-남아 있지만 이제 이 저장소 job 끼리만 순서를 맞춘다(concurrency 와 같은 일).
-
-그래서 두 저장소가 동시에 보드를 열 수 있다. 겹치면 둘 다 CMA 부족이나 VTA 오류로
-실패하고 CMA 가 새어 재부팅이 필요할 수 있다. 이 저장소에서 수동 실행하기 전에
-nest-compiler Actions 에 test-board 가 돌고 있지 않은지 본다.
-
-트리를 저장소마다 따로 둔 것은 한쪽이 다른 커밋으로 checkout 해도 다른 쪽이
-흔들리지 않게 하려는 것이다.
-
-## 고치는 순서: 포크 → 여기서 시험 → nest-compiler (2026-11-06~)
+## 고치는 순서: 포크 → 공식 저장소
 
 ```
-udonghun/nest-compiler (포크) 브랜치에 푸시
-        │
+포크 udonghun/nest-compiler 에 브랜치 푸시
+        │  포크 Actions: test-board (서버 ninja 증분 빌드 → 보드 make → ResNet-18/50, 멀티코어)
         ▼
-nestc-zcu102 model-test / multievta  ── 수동 실행, 입력 ref=<브랜치 또는 커밋>
-        │  서버 ~/nestc-upstream 를 그 커밋으로 맞추고 ninja 증분 빌드
-        │  보드 ~/nest-compiler-2024 도 같은 커밋(vtalib 포함)으로 맞추고 make
-        ▼
-성과가 있으면 → SOTA-PNU/nest-compiler 에 PR → 그쪽 build.yml (test-board 포함)
-통과만 했거나 실패하면 → 포크에 남겨 둔다. nest-compiler 에는 올리지 않는다.
+성과가 있으면 → 고친 커밋만 SOTA-PNU/nest-compiler main 위로 옮겨(cherry-pick)
+               그 저장소에 브랜치로 푸시 → PR → 공식 build + test-board 가 한 번 더 확인
+통과만 했거나 실패하면 → 포크에 남겨 둔다.
 ```
 
+- 포크에서 공식 저장소로 PR 을 보내지 않는다. 공식 build.yml 은 포크에서 온 PR 에는
+  self-hosted job 을 돌리지 않으므로(보안 조건) 아무 확인 없이 올라가게 된다.
+- 포크 main 은 공식 main + PR #6(test-board) + 포크 전용 커밋 `da06632` 이다.
+  `da06632` 은 공식 저장소로 옮기지 않는다.
 - **올리는 기준은 '통과'가 아니라 '성과'다.** 둘 다 만족해야 한다.
   1. 정확도가 깨지지 않는다 — ResNet-18/50 의 281/207/340 확신도가 기준값과 같거나 낫다.
   2. 하나라도 나아진다 — 장당 시간, 멀티코어 처리량, CMA 사용량(최저 여유), 정확도.
-  기준값은 `ref` 를 비운 실행(= `ci/upstream.ref`)의 결과다. 2026-11-06 기준:
+  기준값은 2026-11-06 nest-compiler `214c04b` 의 결과다:
   R18 91.5 ms · R50 418~420 ms · R18 4코어 24.00 · R50 3코어 5.59 · R50 4코어 6.71 img/s.
   PR 본문에 같은 표로 전후를 적는다. 측정 흔들림(±1~2%) 안의 차이는 성과로 치지 않는다.
-- `scripts/sync-upstream.sh` 는 포크에서 먼저 찾고 없으면 원본에서 찾는다. 브랜치
-  이름을 받으면 서버가 맞춘 커밋(40자)을 `UPSTREAM_REF` 로 보드에 넘겨 둘이 같은
-  커밋을 쓴다. 결과 기록(`results/latest.md`, `results/multievta.md`)에 `상류:` 줄이 남는다.
-- `ref` 를 비우면 예전처럼 `ci/upstream.ref` 커밋이다. 포크 시험 뒤에는 트리가 그
-  커밋에 남아 있으므로, 다음 기본 실행이 자동으로 `ci/upstream.ref` 로 되돌린다.
 - 포크는 원본 `main` 을 따라가지 않는다. 원본이 앞서가면 포크 화면의 **Sync fork** 를 누르거나
-  브랜치를 원본 `main` 위로 rebase 한다.
+  브랜치를 포크 main 위로 rebase 한다.
 - vta/vtalib 은 서브모듈(SOTA-PNU/vta_lib)이다. vtalib 을 고칠 일이 생기면 그것도 포크해서
   포크 브랜치의 `.gitmodules` 를 잠시 그쪽으로 돌린다(아직 해 본 적 없다).
 

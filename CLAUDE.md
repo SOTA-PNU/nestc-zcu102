@@ -3,19 +3,18 @@
 ETRI 의 NEST-C 컴파일러로 ZCU102 보드의 VTA/EVTA NPU 에 모델을 올리고,
 그 과정을 GitHub Actions 로 자동화한 것이다. 답은 한국어로 한다.
 
-**2026-11-06 부터 개인 공부·연구용 저장소다.** 상류는 ETRI 원본이 아니라
-SOTA-PNU/nest-compiler 의 `ci/upstream.ref` 커밋이다. 연구실 공식 보드 CI 는
-nest-compiler 의 `build.yml` → `test-board` 다. 같은 서버의 두 러너가 보드 한 대를
-쓰는데 **서로를 기다리지 않는다** — nest-compiler 쪽에는 잠금을 넣지 않기로 했다
-(2026-11-06). 그래서 이 저장소에서 보드 작업을 돌리기 전에 nest-compiler Actions 에
-test-board 가 돌고 있지 않은지 본다. 자세한 것은 `docs/15-nest-compiler-ci.md`.
+**2026-11-06 부터 이 저장소에는 CI 가 없다.** 보드 CI 는 둘뿐이다.
+SOTA-PNU/nest-compiler(공식)와 포크 udonghun/nest-compiler 의 `build.yml` → `test-board`.
+이 저장소의 workflow 8개는 GitHub 에서 비활성화했고(파일은 남김) 러너 `sota-aip` 도 내렸다.
+그래도 두 test-board 가 이 저장소 main 의 `scripts/`·`models*/`·`ci/patch_*.py` 를 checkout
+해서 쓴다 — **여기 main 에 푸시하면 두 CI 에 바로 반영된다.** 자세한 것은 `docs/15-nest-compiler-ci.md`.
 
-**컴파일러를 고치는 순서 (2026-11-06~):** 포크 `udonghun/nest-compiler` 에 브랜치로
-올린다 → 이 저장소의 model-test / multievta 를 입력 `ref=<브랜치>` 로 수동 실행해
-보드에서 시험한다 → **성과가 있는 것만** SOTA-PNU/nest-compiler 에 PR 을 연다.
+**컴파일러를 고치는 순서:** 포크 udonghun/nest-compiler 에 브랜치를 푸시하면 포크 Actions 의
+test-board 가 보드에서 돈다 → **성과가 있는 것만** 고친 커밋을 SOTA-PNU/nest-compiler `main`
+위로 옮겨 그 저장소에 브랜치로 올리고 PR 을 연다(포크 PR 은 그쪽 self-hosted CI 가 돌지 않는다).
+포크 main 의 포크 전용 커밋(da06632 "Run test-board directly in the fork")은 옮기지 않는다.
 통과만으로는 올리지 않는다. 정확도(Top-1 확신도)가 그대로이면서 장당 시간·처리량·CMA
-사용량·정확도 중 하나가 `ci/upstream.ref` 기준값보다 나아져야 한다. PR 본문에 전후 수치를 적는다. 시험 중인 것을
-nest-compiler 에 바로 올리지 않는다(그쪽 Actions 와 compute-nestc 를 쓰지 않게).
+사용량·정확도 중 하나가 기준값보다 나아져야 한다. PR 본문에 전후 수치를 적는다.
 
 **먼저 `NEXT.md` 를 읽는다.** 남은 일이 거기 있다.
 
@@ -147,6 +146,9 @@ ssh -p 25022 xilinx@sota.pusan.ac.kr 'sudo reboot'
 `grep CmaFree /proc/meminfo` 로 확인한다. 25만 kB 근처면 정상이다.
 
 ## 5. 자동화 구조
+
+> **2026-11-06 부터 아래 workflow 는 전부 비활성이다(러너 `sota-aip` 도 내림).** 보드 CI 는
+> nest-compiler 와 포크의 `test-board` 둘이다. 아래는 다시 켤 때를 위한 기록이다.
 
 모델 하나는 `models/<이름>.conf` 하나로 기술한다. 푸시하면 보정 프로파일
 생성 → 번들 컴파일 → 보드 전송 → 추론 → 정답 대조까지 돌고 결과가
