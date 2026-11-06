@@ -1,16 +1,18 @@
+상류 그대로: 214c04b Merge pull request #4 from SOTA-PNU/feature/add-ssd300
+이미 패치됨 — 건너뜀
 전부 이미 패치되어 있다.
 경고: 기준 구현과 다름, 건너뜀 — vta/vtalib/lib/Bundle/CPUBundle_aarch64.cpp
    이미 1<<24 다. 건드리지 않는다.
 --- 적용된 VTA_MAX_XFER ---
 45:#define VTA_MAX_XFER (1<<24)
 --- vtalib 전체 빌드 ---
--- Adding ResConv9Test Bundles.
 -- Adding Resnet18PartitionTest Bundles.
 -- Adding Resnet18RelayEVTAPartitionTest Bundles.
 -- TODO
 -- Adding Resnet18Test Bundles.
 -- Adding Resnet50Test Bundles.
 -- Adding Resnetv10S1C0Test Bundles.
+-- Adding SSD300VGG16Test Bundles.
 -- Adding SoftMax Bundles.
 -- Adding SplatMax Bundles.
 -- Adding Transpose Bundles.
@@ -18,11 +20,11 @@
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /home/xilinx/nest-compiler-2024/build_aarch64
-[ 25%] Built target vta_runtime
-[ 25%] Built target VTABundle
-[ 50%] Built target mul_performance_test
-[ 50%] Built target add_test
-[ 75%] Built target conv13
+[ 20%] Built target vta_runtime
+[ 20%] Built target VTABundle
+[ 40%] Built target mul_performance_test
+[ 60%] Built target add_test
+[ 80%] Built target conv13
 [100%] Built target gemm_cnublas
 [100%] Built target gemm_gemm
 [100%] Built target gemm
@@ -30,8 +32,8 @@
 [100%] Built target move_test
 [100%] Built target move_performance_test
 --- 라이브러리 ---
--rw-rw-r-- 1 xilinx xilinx 236580 Nov  4 09:39 libVTABundle.a
--rw-rw-r-- 1 xilinx xilinx 181366 Nov  4 09:38 libvta_runtime.a
+-rw-rw-r-- 1 xilinx xilinx 242872 Nov  6 03:43 libVTABundle.a
+-rw-rw-r-- 1 xilinx xilinx 181366 Nov  6 03:43 libvta_runtime.a
 --- 소스에 ReLU 패치 표식 ---
 1
 --- 라이브러리에 ReLU 패치 표식 (0 이면 재빌드 안 된 것) ---

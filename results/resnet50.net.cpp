@@ -2,6 +2,7 @@
 
 #include "VTABundle.h"
 #include "vta/runtime.h"
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <time.h>
