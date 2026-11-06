@@ -34,10 +34,16 @@ nestc-zcu102 model-test / multievta  ── 수동 실행, 입력 ref=<브랜치
         │  서버 ~/nestc-upstream 를 그 커밋으로 맞추고 ninja 증분 빌드
         │  보드 ~/nest-compiler-2024 도 같은 커밋(vtalib 포함)으로 맞추고 make
         ▼
-통과하면 → SOTA-PNU/nest-compiler 에 PR → 그쪽 build.yml (test-board 포함)
-실패하면 → 포크에서 고쳐 다시 시험. nest-compiler 에는 올리지 않는다.
+성과가 있으면 → SOTA-PNU/nest-compiler 에 PR → 그쪽 build.yml (test-board 포함)
+통과만 했거나 실패하면 → 포크에 남겨 둔다. nest-compiler 에는 올리지 않는다.
 ```
 
+- **올리는 기준은 '통과'가 아니라 '성과'다.** 둘 다 만족해야 한다.
+  1. 정확도가 깨지지 않는다 — ResNet-18/50 의 281/207/340 확신도가 기준값과 같거나 낫다.
+  2. 하나라도 나아진다 — 장당 시간, 멀티코어 처리량, CMA 사용량(최저 여유), 정확도.
+  기준값은 `ref` 를 비운 실행(= `ci/upstream.ref`)의 결과다. 2026-11-06 기준:
+  R18 91.5 ms · R50 418~420 ms · R18 4코어 24.00 · R50 3코어 5.59 · R50 4코어 6.71 img/s.
+  PR 본문에 같은 표로 전후를 적는다. 측정 흔들림(±1~2%) 안의 차이는 성과로 치지 않는다.
 - `scripts/sync-upstream.sh` 는 포크에서 먼저 찾고 없으면 원본에서 찾는다. 브랜치
   이름을 받으면 서버가 맞춘 커밋(40자)을 `UPSTREAM_REF` 로 보드에 넘겨 둘이 같은
   커밋을 쓴다. 결과 기록(`results/latest.md`, `results/multievta.md`)에 `상류:` 줄이 남는다.
